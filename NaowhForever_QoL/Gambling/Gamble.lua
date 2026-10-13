@@ -2,7 +2,7 @@
 local ns = _G.NaowhForever
 
 local Ambiguate, IsInGuild, IsInGroup, IsInRaid = Ambiguate, IsInGuild, IsInGroup, IsInRaid
-local RandomRoll, UnitFullName, UnitName = RandomRoll, UnitFullName, UnitName
+local RandomRoll, UnitFullName, UnitName = _G.RandomRoll, UnitFullName, UnitName
 local abs, floor, random = math.abs, math.floor, math.random
 local concat, remove = table.concat, table.remove
 local lower, trim = strlower, strtrim
@@ -522,7 +522,7 @@ local function CompileRollPattern(format)
     return concat(pattern)
 end
 
-local ROLL_PATTERN = CompileRollPattern(RANDOM_ROLL_RESULT)
+local ROLL_PATTERN = CompileRollPattern(_G.RANDOM_ROLL_RESULT)
 
 local function OnSystemMessage(message)
     if not (ROLL_PATTERN and game and game.round) then return end

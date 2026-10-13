@@ -157,6 +157,8 @@ local env = setmetatable({
     math = { floor = math.floor, abs = math.abs, random = function() return 1 end },
 }, { __index = _G })
 env._G.NaowhForever = ns
+env._G.RandomRoll = env.RandomRoll
+env._G.RANDOM_ROLL_RESULT = env.RANDOM_ROLL_RESULT
 local file = assert(io.open("NaowhForever_QoL/Gambling/Gamble.lua", "rb"))
 local source = file:read("*a"):gsub("\r\n", "\n")
 file:close()
