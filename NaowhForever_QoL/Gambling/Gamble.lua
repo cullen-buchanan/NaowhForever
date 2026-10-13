@@ -2,8 +2,8 @@
 local ns = _G.NaowhForever
 
 local Ambiguate, IsInGuild, IsInGroup, IsInRaid = Ambiguate, IsInGuild, IsInGroup, IsInRaid
-local RandomRoll, UnitFullName, UnitName = _G.RandomRoll, UnitFullName, UnitName
-local abs, floor, random = math.abs, math.floor, math.random
+local UnitFullName, UnitName = UnitFullName, UnitName
+local floor, random = math.floor, math.random
 local concat, remove = table.concat, table.remove
 local lower, trim = strlower, strtrim
 local RegisterAddonMessagePrefix = C_ChatInfo.RegisterAddonMessagePrefix
@@ -17,9 +17,11 @@ local PREFIX = "NaowhGamble"
 local PAGE = "QoL/Questing & Group"
 local WINDOW_W, WINDOW_H = 520, 470
 local PAD, HEADER, FOOTER = St.WINDOW_PAD, St.WINDOW_HEADER, St.WINDOW_FOOTER
-local INSET, ROW_GAP = 16, 10
+local INSET, ROW_GAP = St.CONTENT_INSET, 10
+local CONTROLS_H, CONFIG_FIELD_W, MODE_BUTTON_W = 84, 140, 140
 local POOL_W, POOL_H = 100, 28
 local CHANNEL_W, CHANNEL_H = 118, 28
+local ANNOUNCE_W = 120
 local BUTTON_W, BUTTON_H, BUTTON_GAP = 148, 28, 10
 local FIELD_INSET = 8
 local MAX_POOL, MAX_WORD = 100000000, 24
@@ -37,12 +39,12 @@ local PATTERN_ESCAPE = {
     ["."] = "%.", ["["] = "%[", ["]"] = "%]", ["*"] = "%*", ["+"] = "%+",
     ["-"] = "%-", ["?"] = "%?",
 }
-local TITLE, SUBTITLE = "Gamble", "Classic rolls and Deathroll"
+local TITLE, SUBTITLE = "Gamble", "Classic and Deathroll"
 local TEXT_POOL = "Pool"
 local TEXT_CHANNEL = "%s Chat"
-local TEXT_NEW, TEXT_JOIN, TEXT_LAST_CALL = "New Game", "Join", "Last Call"
-local TEXT_START, TEXT_ROLL, TEXT_OPTIONS = "Start Rolling", "Roll for Me", "Options"
-local TEXT_NO_GAME = "Start a new session before joining."
+local TEXT_NEW, TEXT_LAST_CALL = "New Game", "Last Call"
+local TEXT_START = "Start Rolling"
+local TEXT_NO_GAME = "Start a new session before rolling."
 local TEXT_NOT_LOBBY = "This session is already rolling."
 local TEXT_NOT_HOST = "Only the session host can start a new session."
 local TEXT_NEED_PLAYERS = "At least two players must join first."
@@ -50,35 +52,26 @@ local TEXT_BAD_POOL = "Enter a whole-number pool between 1 and %d."
 local TEXT_BAD_WORD = "Join and leave words must be different single words without |."
 local TEXT_NEED_GROUP = "Join a party or raid before using that chat channel."
 local TEXT_NEED_GUILD = "Join a guild before using guild chat."
-local TEXT_STARTED = "Gamble session started: %s, pool %d. Say \"%s\" to join."
+local TEXT_STARTED = "Gamble session started: %s, pool %d. Say \"%s\" to join or \"%s\" to leave; use /roll when it's your turn."
 local TEXT_LAST = "Last call: say \"%s\" in %s chat to join."
 local TEXT_JOINED = "%s joined the Gamble session."
 local TEXT_LEFT = "%s left the Gamble session."
-local TEXT_ROLLS = "%s, please begin rolling from 1 to %d."
-local TEXT_TIE = "Tie-break: %s, please reroll from 1 to %d."
-local TEXT_DUEL = "Deathroll: %s and %s. %s, roll from 1 to %d."
-local TEXT_TURN = "%s, roll from 1 to %d."
+local TEXT_DUEL = "Deathroll: %s and %s are playing for %d gold."
+local TEXT_ANNOUNCE, TEXT_STILL_NEED = "Announce Rolls", "Still need to roll: %s. Roll from 1 to %d."
+local TEXT_NEXT_ROLL = "%s, roll from 1 to %d."
+local TEXT_NO_ROLLS = "Everyone has rolled."
 local TEXT_SETTLEMENT = "%s pays %s %d gold."
 local TEXT_ROSTER = "No players have joined yet."
 local TEXT_ROSTER_ROW = "%s  %s"
-local TEXT_STATS = "This session: %s\nLifetime: %s"
-local TEXT_STATS_NONE = "No settled games"
-local TEXT_STATS_LINE = "%d game%s, %d win%s, %d loss%s, net %s gold"
 local TEXT_MODE = "Game mode: %s"
-local TEXT_SESSION_STATS = "Track session stats: %s"
-local TEXT_LIFETIME_STATS = "Track lifetime stats: %s"
-local TEXT_CLEAR_STATS = "Clear Stats"
-local TEXT_CLEAR_ASK = "Clear all saved Gamble stats?"
 local TEXT_JOIN_WORD = "Join word"
 local TEXT_LEAVE_WORD = "Leave word"
-local TEXT_SAVE, TEXT_CANCEL = "Save", "Close"
 local TEXT_COMM_FAILED = "Gamble could not register its group message prefix."
 local TEXT_NOT_ACTIVE = "Turn on Gamble under QoL > Questing & Group first."
 
-local window, poolBox, channelButton, status, roster, stats
-local options
-local joinBox, leaveBox, modeButton, sessionStatsButton, lifetimeStatsButton
-local joinButton, lastCallButton, startButton, rollButton
+local window, controls, poolBox, channelButton, announceButton, status, roster
+local joinBox, leaveBox, modeButton
+local lastCallButton, startButton
 local events, prefixRegistered
 local OnEvent
 local game
@@ -86,6 +79,15 @@ local game
 local function PlayerKey(name)
     if type(name) ~= "string" or name == "" then return nil end
     return lower(Ambiguate(name, "none"))
+end
+
+local function Names(players)
+    local names = {}
+    for i, player in ipairs(players) do
+        names[i] = type(player) == "table" and player.name or player
+    end
+    if #names < 3 then return concat(names, " and ") end
+    return concat(names, ", ", 1, #names - 1) .. " and " .. names[#names]
 end
 
 local function PlayerName()
@@ -163,13 +165,6 @@ local function RequestOpenSessions()
     SendAddonToAvailable("Q")
 end
 
-local function Names(players)
-    local names = {}
-    for i, player in ipairs(players) do names[i] = player.name end
-    if #names < 3 then return concat(names, " and ") end
-    return concat(names, ", ", 1, #names - 1) .. " and " .. names[#names]
-end
-
 local function FindPlayer(name)
     local key = PlayerKey(name)
     if not key or not game then return nil end
@@ -219,49 +214,6 @@ local function RosterMap(players)
     return out
 end
 
-local function LifetimeStats()
-    local account = ns.AccountSettings()
-    if type(account.gambleStats) ~= "table" then account.gambleStats = {} end
-    return account.gambleStats
-end
-
-local function StatsLine(entry)
-    if type(entry) ~= "table" or not entry.games then return TEXT_STATS_NONE end
-    local net = entry.net or 0
-    local amount = tostring(abs(net))
-    if net > 0 then amount = "+" .. amount elseif net < 0 then amount = "-" .. amount end
-    return TEXT_STATS_LINE:format(entry.games, entry.games == 1 and "" or "s",
-        entry.wins or 0, (entry.wins or 0) == 1 and "" or "s",
-        entry.losses or 0, (entry.losses or 0) == 1 and "" or "s", amount)
-end
-
-local function UpdateEntry(store, player, won, amount)
-    local entry = store[player.key]
-    if type(entry) ~= "table" then
-        entry = { games = 0, wins = 0, losses = 0, net = 0 }
-        store[player.key] = entry
-    end
-    entry.games = entry.games + 1
-    entry.net = entry.net + (won and amount or -amount)
-    local field = won and "wins" or "losses"
-    entry[field] = (entry[field] or 0) + 1
-end
-
-local function RecordResult(loserName, winnerName, amount)
-    local loser, winner = FindPlayer(loserName), FindPlayer(winnerName)
-    if not (loser and winner and amount > 0) then return end
-    game.sessionStats = game.sessionStats or {}
-    if S.Get("gambleSessionStats") then
-        UpdateEntry(game.sessionStats, loser, false, amount)
-        UpdateEntry(game.sessionStats, winner, true, amount)
-    end
-    if S.Get("gambleLifetimeStats") then
-        local saved = LifetimeStats()
-        UpdateEntry(saved, loser, false, amount)
-        UpdateEntry(saved, winner, true, amount)
-    end
-end
-
 local function UpdateDisplay()
     if not (window and window:IsShown()) then return end
     local phaseText = game and game.phase or "No session"
@@ -282,21 +234,14 @@ local function UpdateDisplay()
     end
     roster:SetText(#rows > 0 and concat(rows, "\n") or TEXT_ROSTER)
 
-    local key = PlayerKey(PlayerName())
-    local session = game and game.sessionStats and game.sessionStats[key]
-    local saved = ns.AccountSettings().gambleStats
-    local lifetime = key and type(saved) == "table" and saved[key]
-    stats:SetText(TEXT_STATS:format(StatsLine(session), StatsLine(lifetime)))
     local channel = game and game.phase ~= "complete" and game.channel or S.Get("gambleChannel")
     channel = CHANNEL_LABEL[channel] and channel or "PARTY"
     ns.SetButtonText(channelButton, TEXT_CHANNEL:format(CHANNEL_LABEL[channel]))
     if game and game.phase ~= "complete" then poolBox:SetText(tostring(game.pool)) end
-    ns.SetButtonText(joinButton, FindPlayer(PlayerName()) and "Joined" or TEXT_JOIN)
-    joinButton:SetEnabled(game ~= nil and game.phase == "lobby" and not FindPlayer(PlayerName()))
     lastCallButton:SetEnabled(game ~= nil and game.phase == "lobby" and game.isHost)
     startButton:SetEnabled(game ~= nil and game.phase == "lobby" and game.isHost)
-    rollButton:SetEnabled(game ~= nil and game.round ~= nil and key ~= nil
-        and game.round.expected[key] ~= nil and game.round.rolls[key] == nil)
+    announceButton:SetEnabled(game ~= nil and game.isHost and game.round ~= nil
+        and (game.phase == "rolling" or game.phase == "deathroll"))
     channelButton:SetEnabled(not (game and game.phase ~= "complete"))
     poolBox:SetEnabled(not (game and game.phase ~= "complete"))
 end
@@ -375,15 +320,12 @@ local function BroadcastOpen()
     SendAddon(AddonPayload("O", game.pool, game.mode, game.joinWord, game.leaveWord, PlayerName()), game.channel)
 end
 
-local function SetClassicRound(players, max, tieBreak)
+local function SetClassicRound(players, max)
     local expected = RosterMap(players)
     game.phase = "rolling"
     game.round = { expected = expected, rolls = {}, players = players, max = max }
     game.rollMax = max
     if game.isHost then
-        local announcement = tieBreak and TEXT_TIE:format(Names(players), max)
-            or TEXT_ROLLS:format(Names(players), max)
-        SendChat(announcement, game.channel)
         BroadcastRound()
     end
     UpdateDisplay()
@@ -394,7 +336,6 @@ local function SetDeathrollTurn(player, max)
     game.round = { expected = { [player.key] = player }, rolls = {}, players = { player }, max = max }
     game.rollMax = max
     if game.isHost then
-        SendChat(TEXT_TURN:format(player.name, max), game.channel)
         SendAddon(AddonPayload("T", max, player.name), game.channel)
     end
     UpdateDisplay()
@@ -407,13 +348,15 @@ local function StartDeathroll()
     local first, second = players[firstIndex], players[secondIndex]
     if random(2) == 2 then first, second = second, first end
     game.duel = { first = first, second = second, next = first, pot = game.pool }
-    SendChat(TEXT_DUEL:format(first.name, second.name, first.name, game.pool), game.channel)
+    SendChat(TEXT_DUEL:format(first.name, second.name, game.pool), game.channel)
     SendAddon(AddonPayload("M", game.pool, first.name, second.name, first.name), game.channel)
     SetDeathrollTurn(first, game.pool)
 end
 
 local function StartRolling()
-    if not (game and game.isHost and game.phase == "lobby") then return end
+    if not game then ns.Print(TEXT_NO_GAME); return end
+    if not game.isHost then ns.Print(TEXT_NOT_HOST); return end
+    if game.phase ~= "lobby" then ns.Print(TEXT_NOT_LOBBY); return end
     if #game.participants < 2 then
         ns.Print(TEXT_NEED_PLAYERS)
         return
@@ -421,7 +364,7 @@ local function StartRolling()
     if game.mode == "deathroll" then
         StartDeathroll()
     else
-        SetClassicRound(game.participants, game.pool, false)
+        SetClassicRound(game.participants, game.pool)
     end
 end
 
@@ -445,13 +388,12 @@ local function ClassicResult()
         for _, player in ipairs(lows) do
             if not seen[player.key] then tied[#tied + 1], seen[player.key] = player, true end
         end
-        SetClassicRound(tied, game.pool, true)
+        SetClassicRound(tied, game.pool)
         return
     end
     local loser, winner = lows[1], highs[1]
     local amount = high - low
     if loser and winner and loser ~= winner and amount > 0 then
-        RecordResult(loser.name, winner.name, amount)
         SendChat(TEXT_SETTLEMENT:format(loser.name, winner.name, amount), game.channel)
         SendAddon(AddonPayload("D", loser.name, winner.name, amount), game.channel)
     end
@@ -465,7 +407,6 @@ local function DeathrollResult(player, value)
     if not duel then return end
     if value == 1 then
         local winner = player.key == duel.first.key and duel.second or duel.first
-        RecordResult(player.name, winner.name, duel.pot)
         SendChat(TEXT_SETTLEMENT:format(player.name, winner.name, duel.pot), game.channel)
         SendAddon(AddonPayload("D", player.name, winner.name, duel.pot), game.channel)
         game.phase = "complete"
@@ -497,7 +438,7 @@ local function OnRoll(name, value, minimum, maximum)
     end
 end
 
-local function CompileRollPattern(format)
+local function CompileRollPattern(format, expectedCaptures)
     if type(format) ~= "string" then return nil end
     local pattern, captures, index = { "^" }, 0, 1
     while index <= #format do
@@ -518,15 +459,22 @@ local function CompileRollPattern(format)
         end
     end
     pattern[#pattern + 1] = "$"
-    if captures ~= 4 then return nil end
+    if captures ~= (expectedCaptures or 4) then return nil end
     return concat(pattern)
 end
 
 local ROLL_PATTERN = CompileRollPattern(_G.RANDOM_ROLL_RESULT)
+local SELF_ROLL_PATTERN = CompileRollPattern(_G.YOU_ROLL_RESULT, 3)
 
 local function OnSystemMessage(message)
     if not (ROLL_PATTERN and game and game.round) then return end
     local name, value, minimum, maximum = tostring(message):match(ROLL_PATTERN)
+    if name then
+        if name == "You" then name = PlayerName() end
+    elseif SELF_ROLL_PATTERN then
+        value, minimum, maximum = tostring(message):match(SELF_ROLL_PATTERN)
+        if value then name = PlayerName() end
+    end
     if not name then return end
     OnRoll(name, tonumber(value), tonumber(minimum), tonumber(maximum))
 end
@@ -556,7 +504,7 @@ local function OpenPayload(sender, channel, id, pool, mode, joinWord, leaveWord,
     if game and game.phase ~= "complete" then return end
     game = {
         id = id, pool = amount, mode = mode, channel = channel, phase = "lobby",
-        hostKey = PlayerKey(sender), isHost = false, participants = {}, players = {}, sessionStats = {},
+        hostKey = PlayerKey(sender), isHost = false, participants = {}, players = {},
         joinWord = joinWord, leaveWord = leaveWord, hostName = Ambiguate(ownerName, "none"),
     }
     UpdateListening()
@@ -643,7 +591,6 @@ local function OnAddonMessage(prefix, message, channel, sender)
         local loser, winner, amount = rest:match("^([^|]+)|([^|]+)|(%d+)$")
         amount = tonumber(amount)
         if loser and winner and amount and amount <= MAX_POOL then
-            RecordResult(loser, winner, amount)
             game.phase = "complete"
             UpdateListening()
             UpdateDisplay()
@@ -707,28 +654,13 @@ local function NewGame()
     game = {
         id = ("%d:%s"):format(floor(GetTime() * 1000), PlayerName()),
         pool = pool, mode = mode, channel = channel, phase = "lobby", isHost = true,
-        hostKey = PlayerKey(PlayerName()), participants = {}, players = {}, sessionStats = {},
+        hostKey = PlayerKey(PlayerName()), participants = {}, players = {},
         joinWord = joinWord, leaveWord = leaveWord,
     }
     UpdateListening()
     BroadcastOpen()
-    SendChat(TEXT_STARTED:format(MODE_LABEL[mode], pool, game.joinWord), channel)
+    SendChat(TEXT_STARTED:format(MODE_LABEL[mode], pool, game.joinWord, game.leaveWord), channel)
     UpdateDisplay()
-end
-
-local function Join()
-    if not (game and game.phase == "lobby") then ns.Print(TEXT_NO_GAME); return end
-    if FindPlayer(PlayerName()) then return end
-    if AddPlayer(PlayerName()) then
-        SendChat(game.joinWord, game.channel)
-        if game.isHost then
-            SendChat(TEXT_JOINED:format(PlayerName()), game.channel)
-            BroadcastRoster()
-        else
-            SendAddon(AddonPayload("J"), game.channel)
-        end
-        UpdateDisplay()
-    end
 end
 
 local function LastCall()
@@ -736,11 +668,21 @@ local function LastCall()
     SendChat(TEXT_LAST:format(game.joinWord, CHANNEL_LABEL[game.channel]), game.channel)
 end
 
-local function RollForPlayer()
-    local key = PlayerKey(PlayerName())
-    local round = game and game.round
-    if not (round and round.expected[key] and not round.rolls[key]) then return end
-    RandomRoll(1, round.max)
+local function AnnounceRolls()
+    if not (game and game.isHost and game.round) then return end
+    if game.phase == "deathroll" then
+        local player = game.duel and game.duel.next or game.round.players[1]
+        if player then SendChat(TEXT_NEXT_ROLL:format(player.name, game.round.max), game.channel) end
+        return
+    end
+    if game.phase ~= "rolling" then return end
+    local waiting = {}
+    for _, player in ipairs(game.round.players) do
+        if not game.round.rolls[player.key] then waiting[#waiting + 1] = player.name end
+    end
+    local message = #waiting > 0 and TEXT_STILL_NEED:format(Names(waiting), game.round.max)
+        or TEXT_NO_ROLLS
+    SendChat(message, game.channel)
 end
 
 local function CycleChannel()
@@ -753,7 +695,7 @@ local function CycleChannel()
     ns.SetButtonText(channelButton, TEXT_CHANNEL:format(CHANNEL_LABEL[CHANNELS[nextIndex]]))
 end
 
-local function SaveOptions()
+local function SaveWords()
     local joinWord = trim(joinBox:GetText() or "")
     local leaveWord = trim(leaveBox:GetText() or "")
     if not ValidWords(joinWord, leaveWord) then
@@ -764,78 +706,11 @@ local function SaveOptions()
     S.Set("gambleLeaveWord", leaveWord)
     joinBox:SetText(joinWord)
     leaveBox:SetText(leaveWord)
-    if options then options:Hide() end
-end
-
-local function ClearStats()
-    ns.Confirm(TEXT_CLEAR_ASK, function()
-        ns.AccountSettings().gambleStats = {}
-        if game then game.sessionStats = {} end
-        UpdateDisplay()
-    end)
 end
 
 local function ToggleMode()
     S.Set("gambleMode", S.Get("gambleMode") == "deathroll" and "classic" or "deathroll")
     ns.SetButtonText(modeButton, TEXT_MODE:format(MODE_LABEL[S.Get("gambleMode")]))
-end
-
-local function ToggleSessionStats()
-    S.Set("gambleSessionStats", not S.Get("gambleSessionStats"))
-    ns.SetButtonText(sessionStatsButton, TEXT_SESSION_STATS:format(S.Get("gambleSessionStats") and "On" or "Off"))
-end
-
-local function ToggleLifetimeStats()
-    S.Set("gambleLifetimeStats", not S.Get("gambleLifetimeStats"))
-    ns.SetButtonText(lifetimeStatsButton, TEXT_LIFETIME_STATS:format(S.Get("gambleLifetimeStats") and "On" or "Off"))
-end
-
-local function BuildOptionsView(scroll)
-    local view = CreateFrame("Frame", nil, scroll)
-    view:SetHeight(380)
-    local label = ns.Font(view, 12, nil, T.muted)
-    label:SetPoint("TOPLEFT", 0, 0)
-    label:SetText(TEXT_JOIN_WORD)
-    joinBox = ns.NewEditBox(view, { inset = FIELD_INSET })
-    joinBox:SetSize(240, 26)
-    joinBox:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -6)
-
-    label = ns.Font(view, 12, nil, T.muted)
-    label:SetPoint("TOPLEFT", joinBox, "BOTTOMLEFT", 0, -ROW_GAP)
-    label:SetText(TEXT_LEAVE_WORD)
-    leaveBox = ns.NewEditBox(view, { inset = FIELD_INSET })
-    leaveBox:SetSize(240, 26)
-    leaveBox:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -6)
-
-    modeButton = ns.Button(view, "", 260, BUTTON_H, ToggleMode)
-    modeButton:SetPoint("TOPLEFT", leaveBox, "BOTTOMLEFT", 0, -ROW_GAP)
-    sessionStatsButton = ns.Button(view, "", 260, BUTTON_H, ToggleSessionStats)
-    sessionStatsButton:SetPoint("TOPLEFT", modeButton, "BOTTOMLEFT", 0, -ROW_GAP)
-    lifetimeStatsButton = ns.Button(view, "", 260, BUTTON_H, ToggleLifetimeStats)
-    lifetimeStatsButton:SetPoint("TOPLEFT", sessionStatsButton, "BOTTOMLEFT", 0, -ROW_GAP)
-    local clear = ns.Button(view, TEXT_CLEAR_STATS, 140, BUTTON_H, ClearStats)
-    clear:SetPoint("TOPLEFT", lifetimeStatsButton, "BOTTOMLEFT", 0, -ROW_GAP)
-
-    joinBox:SetText(S.Get("gambleJoinWord") or "join")
-    leaveBox:SetText(S.Get("gambleLeaveWord") or "leave")
-    ns.SetButtonText(modeButton, TEXT_MODE:format(MODE_LABEL[S.Get("gambleMode")] or MODE_LABEL.classic))
-    ns.SetButtonText(sessionStatsButton,
-        TEXT_SESSION_STATS:format(S.Get("gambleSessionStats") and "On" or "Off"))
-    ns.SetButtonText(lifetimeStatsButton,
-        TEXT_LIFETIME_STATS:format(S.Get("gambleLifetimeStats") and "On" or "Off"))
-    return view
-end
-
-local function OpenOptions()
-    if not options then
-        options = Parts.SidePanel({ { TEXT_SAVE, SaveOptions }, { TEXT_CANCEL, function() options:Hide() end } },
-            BuildOptionsView, function() return 1 end)
-        options.title:SetText("Gamble Options")
-    end
-    joinBox:SetText(S.Get("gambleJoinWord") or "join")
-    leaveBox:SetText(S.Get("gambleLeaveWord") or "leave")
-    ns.SetButtonText(modeButton, TEXT_MODE:format(MODE_LABEL[S.Get("gambleMode")] or MODE_LABEL.classic))
-    Parts.ShowBeside(options, window)
 end
 
 local function SavePool()
@@ -844,16 +719,14 @@ local function SavePool()
     poolBox:ClearFocus()
 end
 
-local function CreateWindow()
-    window = Parts.Window(WINDOW_W, WINDOW_H, "gambleWindow")
-    window.backdrop:Card(PAD, HEADER + PAD, PAD, FOOTER + PAD)
-    Parts.TitleBar(window, TITLE, SUBTITLE, PAGE)
-    Parts.FooterBrand(window, PAGE)
-
-    local poolLabel = ns.Font(window, 12, nil, T.muted)
-    poolLabel:SetPoint("TOPLEFT", INSET, -(HEADER + ROW_GAP))
+local function CreateControls()
+    controls = CreateFrame("Frame", nil, window)
+    controls:SetPoint("TOPLEFT", window, "TOPLEFT", INSET, -(HEADER + INSET + ROW_GAP))
+    controls:SetSize(WINDOW_W - INSET * 2, CONTROLS_H)
+    local poolLabel = ns.Font(controls, 12, nil, T.muted)
+    poolLabel:SetPoint("TOPLEFT", controls, "TOPLEFT", PAD, 0)
     poolLabel:SetText(TEXT_POOL)
-    poolBox = ns.NewEditBox(window, { inset = FIELD_INSET })
+    poolBox = ns.NewEditBox(controls, { inset = FIELD_INSET })
     poolBox:SetSize(POOL_W, POOL_H)
     poolBox:SetPoint("LEFT", poolLabel, "RIGHT", ROW_GAP, 0)
     poolBox:SetText(tostring(S.Get("gamblePool") or 200))
@@ -861,39 +734,62 @@ local function CreateWindow()
     poolBox:SetScript("OnEnterPressed", SavePool)
     poolBox:SetScript("OnEditFocusLost", SavePool)
 
-    channelButton = ns.Button(window, "", CHANNEL_W, CHANNEL_H, CycleChannel)
+    channelButton = ns.Button(controls, "", CHANNEL_W, CHANNEL_H, CycleChannel)
     channelButton:SetPoint("LEFT", poolBox, "RIGHT", ROW_GAP, 0)
     ns.SetButtonText(channelButton,
         TEXT_CHANNEL:format(CHANNEL_LABEL[S.Get("gambleChannel")] or CHANNEL_LABEL.PARTY))
+    announceButton = ns.Button(controls, TEXT_ANNOUNCE, ANNOUNCE_W, CHANNEL_H, AnnounceRolls)
+    announceButton:SetPoint("LEFT", channelButton, "RIGHT", ROW_GAP, 0)
+
+    local configTop = POOL_H + ROW_GAP
+    local joinLabel = ns.Font(controls, 12, nil, T.muted)
+    joinLabel:SetPoint("TOPLEFT", controls, "TOPLEFT", PAD, -configTop)
+    joinLabel:SetText(TEXT_JOIN_WORD)
+    joinBox = ns.NewEditBox(controls, { inset = FIELD_INSET })
+    joinBox:SetSize(CONFIG_FIELD_W, 26)
+    joinBox:SetPoint("TOPLEFT", controls, "TOPLEFT", PAD, -(configTop + 16))
+    joinBox:SetText(S.Get("gambleJoinWord") or "join")
+    joinBox:SetScript("OnEnterPressed", SaveWords)
+    joinBox:SetScript("OnEditFocusLost", SaveWords)
+
+    local leaveLabel = ns.Font(controls, 12, nil, T.muted)
+    leaveLabel:SetPoint("TOPLEFT", controls, "TOPLEFT", PAD + CONFIG_FIELD_W + 22, -configTop)
+    leaveLabel:SetText(TEXT_LEAVE_WORD)
+    leaveBox = ns.NewEditBox(controls, { inset = FIELD_INSET })
+    leaveBox:SetSize(CONFIG_FIELD_W, 26)
+    leaveBox:SetPoint("TOPLEFT", controls, "TOPLEFT", PAD + CONFIG_FIELD_W + 22, -(configTop + 16))
+    leaveBox:SetText(S.Get("gambleLeaveWord") or "leave")
+    leaveBox:SetScript("OnEnterPressed", SaveWords)
+    leaveBox:SetScript("OnEditFocusLost", SaveWords)
+
+    modeButton = ns.Button(controls, "", MODE_BUTTON_W, BUTTON_H, ToggleMode)
+    modeButton:SetPoint("LEFT", leaveBox, "RIGHT", ROW_GAP, 0)
+    ns.SetButtonText(modeButton, TEXT_MODE:format(MODE_LABEL[S.Get("gambleMode")] or MODE_LABEL.classic))
+end
+
+local function CreateWindow()
+    window = Parts.Window(WINDOW_W, WINDOW_H, "gambleWindow")
+    window.backdrop:Card(PAD, HEADER + PAD, PAD, FOOTER + PAD)
+    Parts.TitleBar(window, TITLE, SUBTITLE, PAGE)
+    Parts.FooterBrand(window, PAGE)
+    CreateControls()
 
     status = ns.Font(window, 13, "OUTLINE", T.accent)
-    status:SetPoint("TOPLEFT", INSET, -(HEADER + 62))
+    status:SetPoint("TOPLEFT", INSET, -(HEADER + INSET + CONTROLS_H + ROW_GAP))
     roster = ns.Font(window, 12)
-    roster:SetPoint("TOPLEFT", INSET, -(HEADER + 90))
+    roster:SetPoint("TOPLEFT", INSET, -(HEADER + INSET + CONTROLS_H + ROW_GAP + 28))
     roster:SetPoint("RIGHT", -INSET, 0)
     roster:SetHeight(140)
     roster:SetJustifyH("LEFT")
     roster:SetJustifyV("TOP")
 
-    stats = ns.Font(window, 11, nil, T.muted)
-    stats:SetPoint("BOTTOMLEFT", INSET, FOOTER + PAD + 80)
-    stats:SetPoint("RIGHT", -INSET, 0)
-    stats:SetJustifyH("LEFT")
-
     local newButton = ns.Button(window, TEXT_NEW, BUTTON_W, BUTTON_H, NewGame)
-    joinButton = ns.Button(window, TEXT_JOIN, BUTTON_W, BUTTON_H, Join)
     lastCallButton = ns.Button(window, TEXT_LAST_CALL, BUTTON_W, BUTTON_H, LastCall)
     startButton = ns.AccentBorder(ns.Button(window, TEXT_START, BUTTON_W, BUTTON_H, StartRolling))
-    rollButton = ns.Button(window, TEXT_ROLL, BUTTON_W, BUTTON_H, RollForPlayer)
-    local openOptionsButton = ns.Button(window, TEXT_OPTIONS, BUTTON_W, BUTTON_H, OpenOptions)
-    local buttons = { newButton, joinButton, lastCallButton }
-    for index, button in ipairs(buttons) do
-        button:SetPoint("BOTTOMLEFT", INSET + (index - 1) * (BUTTON_W + BUTTON_GAP), FOOTER + PAD + 42)
-    end
-    local bottomButtons = { startButton, rollButton, openOptionsButton }
-    for index, button in ipairs(bottomButtons) do
-        button:SetPoint("BOTTOMLEFT", INSET + (index - 1) * (BUTTON_W + BUTTON_GAP), FOOTER + PAD + 6)
-    end
+    local topLeft = floor((WINDOW_W - BUTTON_W * 2 - BUTTON_GAP) / 2)
+    newButton:SetPoint("BOTTOMLEFT", topLeft, FOOTER + PAD + 42)
+    lastCallButton:SetPoint("BOTTOMLEFT", topLeft + BUTTON_W + BUTTON_GAP, FOOTER + PAD + 42)
+    startButton:SetPoint("BOTTOMLEFT", floor((WINDOW_W - BUTTON_W) / 2), FOOTER + PAD + 6)
     window:HookScript("OnShow", function()
         UpdateListening()
         RequestOpenSessions()
@@ -919,7 +815,6 @@ local function OnSettingChanged(key)
     if key == "enabled" or key == "gamble" then
         if not IsOn() then
             game = nil
-            if options then options:Hide() end
             if window then window:Hide() end
         end
         UpdateListening()

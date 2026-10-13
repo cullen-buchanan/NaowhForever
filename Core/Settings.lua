@@ -163,7 +163,7 @@ local S = UI.ModuleSettings("qol", {
     talentPointsTheme = false,
     buffThanks = F.buffThanks, buffThanksCooldown = 10, buffThanksGroup = false, buffThanksEmote = false,
     gamble = F.gamble, gambleChannel = "PARTY", gamblePool = 200, gambleMode = "classic",
-    gambleJoinWord = "join", gambleLeaveWord = "leave", gambleSessionStats = true, gambleLifetimeStats = true,
+    gambleJoinWord = "join", gambleLeaveWord = "leave",
     buffThanksWhisper = true,
 
     buffThanksText = "Thanks for the {buff}, fellow traveler!\nMuch appreciated, {name}, thanks for the {buff}!",
