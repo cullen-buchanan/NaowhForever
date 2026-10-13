@@ -24,11 +24,11 @@ local PAGE = "QoL/Questing & Group"
 local WINDOW_W, WINDOW_H = 520, 470
 local PAD, HEADER, FOOTER = St.WINDOW_PAD, St.WINDOW_HEADER, St.WINDOW_FOOTER
 local INSET, ROW_GAP = St.CONTENT_INSET, 10
-local CONTROLS_H, CONFIG_FIELD_W, MODE_BUTTON_W = 84, 140, 140
+local CONTROLS_H, CONFIG_FIELD_W, MODE_BUTTON_W = 84, 130, 160
 local POOL_W, POOL_H = 100, 28
 local CHANNEL_W, CHANNEL_H = 118, 28
-local ANNOUNCE_W = 150
-local BUTTON_W, BUTTON_H, BUTTON_GAP = 148, 28, 10
+local ANNOUNCE_W = 120
+local BUTTON_W, BUTTON_H, BUTTON_GAP = 112, 28, 8
 local FIELD_INSET = 8
 
 -- Bounds keep session values and pipe-delimited addon payloads within safe sizes.
@@ -68,6 +68,7 @@ local TEXT_POOL = "Pool"
 local TEXT_CHANNEL = "%s Chat"
 local TEXT_NEW, TEXT_LAST_CALL = "New Game", "Last Call"
 local TEXT_START = "Start Rolling"
+local TEXT_CANCEL = "Cancel Session"
 local TEXT_NO_GAME = "Start a new session before rolling."
 local TEXT_NOT_LOBBY = "This session is already rolling."
 local TEXT_NOT_HOST = "Only the session host can start a new session."
@@ -76,10 +77,12 @@ local TEXT_BAD_POOL = "Enter a whole-number pool between 1 and %d."
 local TEXT_BAD_WORD = "Join and leave words must be different single words without |."
 local TEXT_NEED_GROUP = "Join a party or raid before using that chat channel."
 local TEXT_STARTED = "Gamble session started: %s, pool %d. Say \"%s\" to join or \"%s\" to leave; use /roll when it's your turn."
+local TEXT_CANCELLED = "Gamble session cancelled by %s."
 local TEXT_LAST = "Last call: say \"%s\" in %s chat to join."
 local TEXT_JOINED = "%s joined the Gamble session."
 local TEXT_LEFT = "%s left the Gamble session."
 local TEXT_DUEL = "Deathroll: %s and %s are playing for %d gold."
+local TEXT_DUEL_START = "%s was randomly selected to roll first. Roll from 1 to %d."
 local TEXT_ANNOUNCE, TEXT_STILL_NEED = "Announce Rolls", "Still need to roll: %s. Roll from 1 to %d."
 local TEXT_NEXT_ROLL = "%s, roll from 1 to %d."
 local TEXT_NO_ROLLS = "Everyone has rolled."
@@ -95,7 +98,7 @@ local TEXT_NOT_ACTIVE = "Turn on Gamble under QoL > Questing & Group first."
 -- Lazily-created main-window widgets; nil until Gamble is first opened.
 local window, controls, poolBox, channelButton, announceButton, status, roster
 local joinBox, leaveBox, modeButton
-local lastCallButton, startButton
+local lastCallButton, startButton, cancelButton
 
 -- The single event frame is created on demand; the prefix only needs registering once.
 local events, prefixRegistered
@@ -311,10 +314,12 @@ end
 local function UpdateDisplay()
     if not (window and window:IsShown()) then return end
     local phaseText = game and game.phase or "No session"
-    if game and game.phase == "lobby" then phaseText = "Waiting for players" end
+    if game and game.phase == "lobby" then phaseText = "Waiting for players to join" end
     if game and game.phase == "rolling" then phaseText = "Waiting for rolls" end
     if game and game.phase == "deathroll" then phaseText = "Deathroll in progress" end
-    if game and game.phase == "complete" then phaseText = "Session complete" end
+    if game and game.phase == "complete" then
+        phaseText = game.cancelled and "Session cancelled" or "Session complete"
+    end
     status:SetText(phaseText)
 
     local rows = {}
@@ -334,6 +339,7 @@ local function UpdateDisplay()
     if game and game.phase ~= "complete" then poolBox:SetText(tostring(game.pool)) end
     lastCallButton:SetEnabled(game ~= nil and game.phase == "lobby" and game.isHost)
     startButton:SetEnabled(game ~= nil and game.phase == "lobby" and game.isHost)
+    cancelButton:SetEnabled(game ~= nil and game.phase ~= "complete" and game.isHost)
     announceButton:SetEnabled(game ~= nil and game.isHost and game.round ~= nil
         and (game.phase == "rolling" or game.phase == "deathroll"))
     channelButton:SetEnabled(not (game and game.phase ~= "complete"))
@@ -473,11 +479,12 @@ local function StartDeathroll()
     local firstIndex, secondIndex = random(#players), random(#players - 1)
     if secondIndex >= firstIndex then secondIndex = secondIndex + 1 end
     local first, second = players[firstIndex], players[secondIndex]
-    if random(2) == 2 then first, second = second, first end
-    game.duel = { first = first, second = second, next = first, pot = game.pool }
     SendChat(TEXT_DUEL:format(first.name, second.name, game.pool), game.channel)
-    SendAddon(AddonPayload("M", game.pool, first.name, second.name, first.name), game.channel)
-    SetDeathrollTurn(first, game.pool)
+    local starter = random(2) == 1 and first or second
+    game.duel = { first = first, second = second, next = starter, pot = game.pool }
+    SendAddon(AddonPayload("M", game.pool, first.name, second.name, starter.name), game.channel)
+    SendChat(TEXT_DUEL_START:format(starter.name, game.pool), game.channel)
+    SetDeathrollTurn(starter, game.pool)
 end
 
 --- Start the selected game mode after validating host and lobby state.
@@ -773,6 +780,7 @@ local function OnAddonMessage(prefix, message, channel, sender)
         end
     elseif kind == "X" then
         game.phase = "complete"
+        game.cancelled = true
         UpdateListening()
         UpdateDisplay()
     end
@@ -857,6 +865,19 @@ end
 local function LastCall()
     if not (game and game.isHost and game.phase == "lobby") then ns.Print(TEXT_NOT_LOBBY); return end
     SendChat(TEXT_LAST:format(game.joinWord, CHANNEL_LABEL[game.channel]), game.channel)
+end
+
+--- Cancel the active session and notify its participants.
+-- @local
+local function CancelSession()
+    if not game or game.phase == "complete" then ns.Print(TEXT_NO_GAME); return end
+    if not game.isHost then ns.Print(TEXT_NOT_HOST); return end
+    SendAddon(AddonPayload("X"), game.channel)
+    SendChat(TEXT_CANCELLED:format(PlayerName()), game.channel)
+    game.phase = "complete"
+    game.cancelled = true
+    UpdateListening()
+    UpdateDisplay()
 end
 
 --- Announce who still needs to roll, or the active Deathroll turn and limit.
@@ -991,10 +1012,14 @@ local function CreateWindow()
     local newButton = ns.Button(window, TEXT_NEW, BUTTON_W, BUTTON_H, NewGame)
     lastCallButton = ns.Button(window, TEXT_LAST_CALL, BUTTON_W, BUTTON_H, LastCall)
     startButton = ns.AccentBorder(ns.Button(window, TEXT_START, BUTTON_W, BUTTON_H, StartRolling))
-    local topLeft = floor((WINDOW_W - BUTTON_W * 2 - BUTTON_GAP) / 2)
-    newButton:SetPoint("BOTTOMLEFT", topLeft, FOOTER + PAD + 42)
-    lastCallButton:SetPoint("BOTTOMLEFT", topLeft + BUTTON_W + BUTTON_GAP, FOOTER + PAD + 42)
-    startButton:SetPoint("BOTTOMLEFT", floor((WINDOW_W - BUTTON_W) / 2), FOOTER + PAD + 6)
+    cancelButton = ns.Button(window, TEXT_CANCEL, BUTTON_W, BUTTON_H, CancelSession)
+    local rowWidth = BUTTON_W * 4 + BUTTON_GAP * 3
+    local rowLeft = floor((WINDOW_W - rowWidth) / 2)
+    local rowBottom = FOOTER + PAD + 6
+    newButton:SetPoint("BOTTOMLEFT", rowLeft, rowBottom)
+    lastCallButton:SetPoint("BOTTOMLEFT", rowLeft + BUTTON_W + BUTTON_GAP, rowBottom)
+    startButton:SetPoint("BOTTOMLEFT", rowLeft + (BUTTON_W + BUTTON_GAP) * 2, rowBottom)
+    cancelButton:SetPoint("BOTTOMLEFT", rowLeft + (BUTTON_W + BUTTON_GAP) * 3, rowBottom)
     window:HookScript("OnShow", function()
         UpdateListening()
         RequestOpenSessions()

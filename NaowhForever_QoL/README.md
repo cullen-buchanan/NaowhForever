@@ -248,7 +248,8 @@ NaowhForever_QoL/
 - Classic rerolls only the tied highest or lowest players and the opposite extreme roller.
   Deathroll chooses two joined players and alternates their rolls until one rolls 1.
 - Gamble registers chat events only while its window is open or a session is active. Its join and
-  leave words and game mode can be changed in the main window.
+  leave words and game mode can be changed in the main window. The host can cancel an active
+  session from the main window.
 - The Crosshair checks melee range with one ability per class, its lowest rank (Forever keeps
   every rank known). Druids depend on form: Claw in Cat Form (form 1), Maul in Bear and Dire Bear
   (5 and 8). Shamans without Stormstrike and casters have none; Melee Spell ID sets one of your

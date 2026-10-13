@@ -226,7 +226,19 @@ check("pool, chat and announce controls are inset within the Gamble card",
         and state.editboxes[2].parent == state.controls and state.editboxes[2]:GetText() == "join"
         and state.editboxes[3].parent == state.controls and state.editboxes[3]:GetText() == "leave"
         and HasButton("Game mode: Classic") and not HasButton("Options")
-        and not HasButton("Join") and not HasButton("Roll for Me"))
+        and not HasButton("Join") and not HasButton("Roll for Me")
+        and Button("Cancel Session").enabled == false)
+local newAnchor = rawget(Button("New Game"), "anchorPoints")[1]
+local lastAnchor = rawget(Button("Last Call"), "anchorPoints")[1]
+local startAnchor = rawget(Button("Start Rolling"), "anchorPoints")[1]
+local cancelAnchor = rawget(Button("Cancel Session"), "anchorPoints")[1]
+check("the four session buttons share one centered bottom row",
+    newAnchor[1] == "BOTTOMLEFT" and lastAnchor[1] == "BOTTOMLEFT"
+        and startAnchor[1] == "BOTTOMLEFT" and cancelAnchor[1] == "BOTTOMLEFT"
+        and newAnchor[3] == lastAnchor[3] and lastAnchor[3] == startAnchor[3]
+        and startAnchor[3] == cancelAnchor[3] and lastAnchor[2] > newAnchor[2]
+        and startAnchor[2] > lastAnchor[2] and cancelAnchor[2] > startAnchor[2]
+        and cancelAnchor[2] + rawget(Button("Cancel Session"), "width") < 520)
 Button("Party Chat"):Click()
 check("chat channel selection switches from Party to Raid",
     S.Get("gambleChannel") == "RAID" and HasButton("Raid Chat"))
@@ -299,6 +311,16 @@ Event("CHAT_MSG_PARTY", "ready", "Alice Stone")
 Button("Start Rolling"):Click()
 check("Deathroll starts and waits for its first /roll",
     state.status.text == "Deathroll in progress")
+local duelAnnouncement = state.chats[#state.chats - 1]
+local starterAnnouncement = state.chats[#state.chats]
+check("Deathroll announces the two randomly selected participants first",
+    duelAnnouncement[1] == "Deathroll: Host and Alice Stone are playing for 200 gold."
+        and duelAnnouncement[2] == "PARTY")
+check("Deathroll then announces its randomly selected first roller and range",
+    starterAnnouncement[1] == "Host was randomly selected to roll first. Roll from 1 to 200."
+        and starterAnnouncement[2] == "PARTY"
+        and state.addons[#state.addons - 1][2]:match("|Host|Alice Stone|Host$")
+        and state.addons[#state.addons][2]:match("^T|[^|]+|200|Host$"))
 Event("CHAT_MSG_SYSTEM", "You roll 40 (1-200)")
 check("Deathroll does not automatically announce every next turn", not Chat("Alice Stone, roll", "PARTY"))
 Button("Announce Rolls"):Click()
@@ -326,4 +348,19 @@ check("closing keeps listeners active for the joined session",
     not state.window:IsShown() and state.events.events.CHAT_MSG_ADDON)
 Event("CHAT_MSG_ADDON", "NaowhGamble", "D|remote|Bob|Alice|10", "PARTY", "Host")
 check("a completed session unregisters hidden-window listeners", next(state.events.events) == nil)
+
+ns.ToggleGamble()
+S.Set("gambleMode", "classic")
+Button("New Game"):Click()
+Event("CHAT_MSG_PARTY", "ready", "Host")
+Event("CHAT_MSG_PARTY", "ready", "Alice")
+Button("Start Rolling"):Click()
+check("the host can cancel an active session",
+    Button("Cancel Session").enabled and state.status.text == "Waiting for rolls")
+Button("Cancel Session"):Click()
+check("cancelling closes the session and announces it to the group",
+    state.status.text == "Session cancelled"
+        and Chat("Gamble session cancelled by Host", "PARTY")
+        and state.addons[#state.addons][2]:match("^X|"))
+check("cancel is disabled after the session ends", Button("Cancel Session").enabled == false)
 print(("test-gamble: %d checks passed"):format(checks))
