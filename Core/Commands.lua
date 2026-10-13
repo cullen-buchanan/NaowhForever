@@ -29,6 +29,7 @@ local HELP_LINES = {
     "/nf profrank: your professions' next ranks",
     "/nf scrap: the Scrap List",
     "/nf quiz: the WoW quiz",
+    "/nf gamble: open Gamble",
     "/nf setup: the onboarding",
     "/nfquests (or /nfcompleto): the Quest List, in Discovery",
 }
@@ -136,6 +137,8 @@ SlashCmdList["NAOWHFOREVER"] = function(msg)
         ns.ToggleDisenchant()
     elseif cmd == "scrap" and ns.ToggleScrapList then
         ns.ToggleScrapList()
+    elseif cmd == "gamble" and ns.ToggleGamble then
+        ns.ToggleGamble()
     elseif (cmd == "setup" or cmd == "welcome") and ns.ShowSetup then
         ns.ShowSetup()
     else

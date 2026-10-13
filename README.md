@@ -82,6 +82,7 @@ character or share them with a friend.
 | `/nf setup` | The onboarding, to pick your profile, skin and modules again |
 | `/nf quiz` | A WoW quiz for flights and campfires |
 | `/nfaim` | The Aim Trainer |
+| `/nf gamble` | Gamble sessions |
 | `/nf scrap` | Your Scrap List (Scrap Marker, QoL > Loot & Items) |
 | `/copy` | The text under your mouse, ready to copy (turn on Global Copy in QoL > Interface) |
 | `/nf badges id` | Your badge code, for all your characters (see [Supporter badges](#supporter-badges)) |

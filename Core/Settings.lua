@@ -150,6 +150,8 @@ local S = UI.ModuleSettings("qol", {
     talentPointsFontSize = 22, talentPointsOutline = "OUTLINE", talentPointsBackground = "none",
     talentPointsTheme = false,
     buffThanks = F.buffThanks, buffThanksCooldown = 10, buffThanksGroup = false, buffThanksEmote = false,
+    gamble = F.gamble, gambleChannel = "PARTY", gamblePool = 200, gambleMode = "classic",
+    gambleJoinWord = "join", gambleLeaveWord = "leave", gambleSessionStats = true, gambleLifetimeStats = true,
     buffThanksText = "Thanks for the {buff}, fellow traveler!\nMuch appreciated, {name}, thanks for the {buff}!",
     buffThanksPerBuff = false,
     buffThanksIntellect = "Thanks for the {buff}! I feel smarter already.\nThanks for the {buff}, {name}, my brain thanks you!\nIQ is rising, thank you for the {buff}, {name}!",

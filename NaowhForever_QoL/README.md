@@ -59,6 +59,8 @@ NaowhForever_QoL/
     Disband.lua         removing everyone from your group (ns.DisbandGroup), for the Disband button
     Trainer.lua         the trainer popup and rank swaps (ns.TrainerRankCheck, ns.TrainerForgetKept),
                         and its card on the Training Planner's page
+  Gambling/
+    Gamble.lua          Gamble sessions: Classic rolls and Deathroll
   XP/
     GroupXP.lua         Group XP
     XPTicker.lua        XP per Hour (ns.ResetXPTicker)
@@ -192,6 +194,13 @@ NaowhForever_QoL/
 - The line editor's box fills the scroll area down to its buttons and grows past it with the
   lines. `Parts.ShowBeside` sets its height once, so its bottom is tied to the options window's
   too, to follow a resize.
+- Gamble uses group chat for its announcements and join words, and the addon-message channel to
+  keep Gamble windows in sync. Each player rolls for themselves; the addon only tracks the
+  game's roll messages and reports settlements, it never moves gold.
+- Classic rerolls only the tied highest or lowest players and the opposite extreme roller.
+  Deathroll chooses two joined players and alternates their rolls until one rolls 1.
+- Gamble registers chat events only while its window is open or a session is active. Current
+  session stats stay with that session; lifetime stats live in the account settings.
 - The Crosshair checks melee range with one ability per class, its lowest rank (Forever keeps
   every rank known). Druids depend on form: Claw in Cat Form (form 1), Maul in Bear and Dire Bear
   (5 and 8). Shamans without Stormstrike and casters have none; Melee Spell ID sets one of your
