@@ -27,6 +27,14 @@ local SKIN_CLASSIC = "classic"
 -- The Classic+ skin sets text as the game does: Friz Quadrata, and Arial Narrow for compact numbers.
 local FONT_NAOWH, FONT_CLASSIC, FONT_DATA = "Naowh", "Friz Quadrata TT", "Arial Narrow"
 local FONT_HEADING = FONT_CLASSIC
+local LOCALE_ADDON_PREFIX, ENGLISH = "NaowhForever_", "enUS"
+local GLYPH_FONTS = { koKR = "Fonts\\2002.TTF", zhCN = "Fonts\\ARKai_T.ttf", zhTW = "Fonts\\bLEI00D.ttf" }
+local FRIZ_CYRILLIC = "Fonts\\FRIZQT___CYR.TTF"
+local LANGUAGES = { "enUS", "deDE", "esES", "esMX", "frFR", "itIT", "ptBR", "ruRU", "koKR", "zhCN", "zhTW" }
+local LANGUAGE_NAMES = { enUS = "English", deDE = "Deutsch", esES = "Espa\195\177ol (Espa\195\177a)",
+    esMX = "Espa\195\177ol (M\195\169xico)", frFR = "Fran\195\167ais", itIT = "Italiano",
+    ptBR = "Portugu\195\170s (Brasil)", ruRU = "\208\160\209\131\209\129\209\129\208\186\208\184\208\185",
+    koKR = "Korean", zhCN = "Chinese (Simplified)", zhTW = "Chinese (Traditional)" }
 local MODAL_LEVEL_BASE, MODAL_LEVEL_STEP, MODAL_LEVEL_CAP, MODAL_PANEL_RAISE = 10, 10, 150, 5
 local EDIT_INSET = 6
 local SEARCH_HINT_SIZE, SEARCH_CLEAR_SIZE, SEARCH_CLEAR_TEXT = 12, 18, 13
@@ -46,6 +54,8 @@ local DB_VERSION = 1
 local GUID_PATTERN, HEX = "^Player%-(%d+)%-(%x+)$", 16
 local SCALE_DEFAULT, SCALE_MIN, SCALE_MAX, PERCENT = 100, 50, 200, 100
 local LOGIN_APPLY_DELAY = 1
+local DAMAGE_METER_ADDON, GAME_METER_CVAR, GAME_METER_SAVED = "NaowhForever_DamageMeter", "damageMeterEnabled",
+    "damageMeterGameWas"
 local ERR_NO_PROFILE = "no such profile"
 local TEXT_SECRET = "(withheld: this line contained a secret value)"
 local TEXT_LIBRARIES_MISSING = "Libraries missing (%s), so parts of the addon will not work. Download Naowh "
@@ -53,21 +63,61 @@ local TEXT_LIBRARIES_MISSING = "Libraries missing (%s), so parts of the addon wi
 local TEXT_RELOAD_BLOCKED = "Can't reload from a button in combat. Type /reload."
 local TEXT_COPY_HINT = "Ctrl+A, Ctrl+C to copy"
 local TEXT_GAME_DEFAULT = "Game Default"
+local UTF8_LATIN = "\195"
+local LATIN_CAPITAL, LATIN_SMALL = "\195([\128-\158])", "\195([\160-\190])"
+local LATIN_CASE_STEP, LATIN_TIMES, LATIN_DIVIDE = 32, 151, 183
+local SHARP_S, SHARP_S_UPPER = "\195\159", "SS"
 
 local ns = {}
 _G.NaowhForever = ns
 ns.MODULE_KEY = MODULE_KEY
 ns.MEDIA = MEDIA
 
-local locale = _G.NaowhForeverLocale or {}
+local function PickLocale()
+    local saved = _G.NaowhForeverLanguageDB
+    local pick = saved and saved.locale
+    if LANGUAGE_NAMES[pick or ""] then return pick end
+    local client = GetLocale and GetLocale() or ENGLISH
+    return LANGUAGE_NAMES[client] and client or ENGLISH
+end
+
+ns.LOCALE = PickLocale()
+ns.LANGUAGES, ns.LANGUAGE_NAMES = LANGUAGES, LANGUAGE_NAMES
+if ns.LOCALE ~= ENGLISH then
+    C_AddOns.LoadAddOn(LOCALE_ADDON_PREFIX .. ns.LOCALE)
+end
+
+local catalog = _G.NaowhForeverLocale or {}
+local translation = _G.NaowhForeverTranslation or {}
 function ns.L(key, ...)
-    local text = locale[key]
+    local text = translation[key]
+    if text == nil or text == true then text = catalog[key] end
     if text == nil or text == true then text = key end
     if select("#", ...) > 0 then return text:format(...) end
     return text
 end
 
-ns.CODE_BUILD = "1.1.6"
+local function LatinUpper(byte)
+    local b = byte:byte()
+    if b == LATIN_DIVIDE then return nil end
+    return UTF8_LATIN .. string.char(b - LATIN_CASE_STEP)
+end
+
+local function LatinLower(byte)
+    local b = byte:byte()
+    if b == LATIN_TIMES then return nil end
+    return UTF8_LATIN .. string.char(b + LATIN_CASE_STEP)
+end
+
+function ns.Upper(text)
+    return (text:upper():gsub(LATIN_SMALL, LatinUpper):gsub(SHARP_S, SHARP_S_UPPER))
+end
+
+function ns.Lower(text)
+    return (text:lower():gsub(LATIN_CAPITAL, LatinLower))
+end
+
+ns.CODE_BUILD = "1.1.11"
 
 ns.THEME = {
     bg     = { r = 0x0e / 255, g = 0x0f / 255, b = 0x11 / 255 },
@@ -313,7 +363,7 @@ ns.PRINT_LOGO = ("|T%s:0:0:0:%d|t"):format(PRINT_LOGO_PATH, -PRINT_LOGO_DROP)
 
 function ns.Print(msg)
     if issecretvalue and issecretvalue(msg) then
-        msg = ns.Color("accent", TEXT_SECRET)
+        msg = ns.Color("accent", ns.L(TEXT_SECRET))
     end
     print(ns.PRINT_LOGO .. " " .. ns.Color("accent", "Naowh") .. " Forever: " .. tostring(msg))
 end
@@ -324,12 +374,25 @@ local function OnLibraryCheck()
         if not (LibStub and LibStub(name, true)) then missing[#missing + 1] = name end
     end
     if #missing == 0 then return end
-    ns.Print(ns.Color(WARNING, TEXT_LIBRARIES_MISSING:format(table.concat(missing, ", "))))
+    ns.Print(ns.Color(WARNING, ns.L(TEXT_LIBRARIES_MISSING, table.concat(missing, ", "))))
 end
 
 local libCheck = CreateFrame("Frame")
 libCheck:RegisterEvent("PLAYER_LOGIN")
 libCheck:SetScript("OnEvent", OnLibraryCheck)
+
+local function RestoreGameMeter()
+    local account = ns.AccountSettings()
+    if account[GAME_METER_SAVED] == nil or C_AddOns.IsAddOnLoaded(DAMAGE_METER_ADDON) or InCombatLockdown() then
+        return
+    end
+    C_CVar.SetCVar(GAME_METER_CVAR, account[GAME_METER_SAVED])
+    account[GAME_METER_SAVED] = nil
+end
+
+local meterCheck = CreateFrame("Frame")
+meterCheck:RegisterEvent("PLAYER_LOGIN")
+meterCheck:SetScript("OnEvent", RestoreGameMeter)
 
 local reloader
 
@@ -365,7 +428,7 @@ local function CoverWithReload(btn)
 end
 
 local function ReloadBlocked()
-    ns.Print(TEXT_RELOAD_BLOCKED)
+    ns.Print(ns.L(TEXT_RELOAD_BLOCKED))
 end
 
 function ns.MakeReloadButton(btn)
@@ -388,9 +451,18 @@ if LSM then
 end
 
 ns.BLIZZARD_FONT = "__blizzard"
+-- name is the font as requested (an LSM name or one of this file's FONT_* constants), path its
+-- resolved file. The Cyrillic swap keys off the request, not the resolved path, so it still
+-- applies if LSM's registration for Friz Quadrata ever changes.
+function ns.LocaleFont(name, path)
+    if GLYPH_FONTS[ns.LOCALE] then return GLYPH_FONTS[ns.LOCALE] end
+    if ns.LOCALE == "ruRU" and name == FONT_CLASSIC then return FRIZ_CYRILLIC end
+    return path
+end
+
 local function FontPath(name)
     if name == nil or name == ns.BLIZZARD_FONT or not LSM then return nil end
-    return LSM:Fetch("font", name, true) or LSM:Fetch("font", "Naowh", true)
+    return ns.LocaleFont(name, LSM:Fetch("font", name, true) or LSM:Fetch("font", "Naowh", true))
 end
 
 local uiFontPath
@@ -402,7 +474,7 @@ end
 function ns.AddonFontPath(classic)
     if classic == nil then classic = ns.classicSkin end
     local default = classic and FONT_CLASSIC or FONT_NAOWH
-    return FontPath(ns.AccountSettings().uiFont or default) or STANDARD_TEXT_FONT
+    return FontPath(ns.AccountSettings().uiFont or default) or ns.LocaleFont(default, STANDARD_TEXT_FONT)
 end
 
 function ns.HeadingFontPath(classic)
@@ -422,7 +494,7 @@ end
 
 -- The title plate is the one place the Classic+ skin keeps the Naowh face.
 function ns.TitleFontPath()
-    return NAOWH_FONT
+    return ns.LocaleFont(FONT_NAOWH, NAOWH_FONT)
 end
 
 function ns.UIFontPath()
@@ -722,10 +794,11 @@ end
 local function ComposeTooltip(frame)
     local b = frame._tipBody
     if type(b) == "function" then b = b() end
+    local title = ns.L(frame._tipTitle)
     if b and b ~= "" then
-        return ns.Color("accent", frame._tipTitle) .. "\n" .. b
+        return ns.Color("accent", title) .. "\n" .. ns.L(b)
     end
-    return frame._tipTitle
+    return title
 end
 
 local TOOLTIP_OPTS = { anchor = "cursor", justify = "LEFT" }
@@ -907,7 +980,7 @@ function ns.PromptText(title, text, maxLetters, onAccept)
     local head = UI.KeepFont(panel, "head", DIALOG_HEAD_SIZE, "OUTLINE")
     head:SetPoint("TOP", 0, -DIALOG_PAD)
     head:SetWidth(PROMPT_TEXT_W)
-    head:SetText(title)
+    head:SetText(ns.L(title))
     panel:SetHeight(math.max(PROMPT_H, head:GetStringHeight() + PROMPT_ROOM))
     local box = UI.Keep(panel, "box", ns.NewEditBox)
     box:SetPoint("TOP", head, "BOTTOM", 0, -PROMPT_BOX_GAP)
@@ -950,10 +1023,10 @@ function ns.ShowCopyBox(title, text, onClose)
     local dimmer, panel = ns.MakeModal(COPY_W, COPY_H, "copyBox")
     local head = UI.KeepFont(panel, "head", DIALOG_HEAD_SIZE, "OUTLINE", T.accent)
     head:SetPoint("TOPLEFT", DIALOG_PAD, -COPY_HEAD_Y)
-    head:SetText(title)
+    head:SetText(ns.L(title))
     local hint = UI.KeepFont(panel, "hint", COPY_HINT_SIZE, nil, T.muted)
     hint:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -COPY_HINT_GAP)
-    hint:SetText(TEXT_COPY_HINT)
+    hint:SetText(ns.L(TEXT_COPY_HINT))
     UI.KeepButton(panel, "close", "X", COPY_CLOSE_SIZE, COPY_CLOSE_SIZE, function() dimmer:Hide() end)
         :SetPoint("TOPRIGHT", -COPY_CLOSE_INSET, -COPY_CLOSE_INSET)
 
@@ -976,7 +1049,7 @@ local function ConfirmHead(UI, panel, text)
     local head = UI.KeepFont(panel, "head", CONFIRM_TEXT_SIZE, nil)
     head:SetPoint("TOP", 0, -CONFIRM_TEXT_Y)
     head:SetWidth(CONFIRM_TEXT_W)
-    head:SetText(text)
+    head:SetText(ns.L(text))
     return head
 end
 
@@ -1109,7 +1182,10 @@ specWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
 specWatch:RegisterUnitEvent("PLAYER_SPECIALIZATION_CHANGED", "player")
 specWatch:SetScript("OnEvent", function() ns.ApplySpecProfile((ns.CurrentSpec())) end)
 
-local function ApplyNow() ns.Apply() end
+local function ApplyNow()
+    ns.Shared.Settings.WatchEllesmere()
+    ns.Apply()
+end
 
 local function OnReapplyEvent(_, event)
     if event == "PLAYER_LOGIN" then
@@ -1336,7 +1412,7 @@ end
 
 function ns.SwitchProfile(name)
     local sv = DB()
-    if type(sv.profiles[name]) ~= "table" then return false, ERR_NO_PROFILE end
+    if type(sv.profiles[name]) ~= "table" then return false, ns.L(ERR_NO_PROFILE) end
     sv.charActive[CharKey()] = name
     activeRoot = nil
     local spec = ns.CurrentSpec and ns.CurrentSpec()
@@ -1351,8 +1427,8 @@ end
 
 local function ValidName(name, allowExisting)
     name = Trimmed(name)
-    if name == "" then return nil, "the name is empty" end
-    if not allowExisting and DB().profiles[name] then return nil, "that name is taken" end
+    if name == "" then return nil, ns.L("the name is empty") end
+    if not allowExisting and DB().profiles[name] then return nil, ns.L("that name is taken") end
     return name
 end
 
@@ -1363,7 +1439,7 @@ end
 
 function ns.SetAccountProfile(name)
     local sv = DB()
-    if type(sv.profiles[name]) ~= "table" then return false, ERR_NO_PROFILE end
+    if type(sv.profiles[name]) ~= "table" then return false, ns.L(ERR_NO_PROFILE) end
     sv.defaultProfile = name
     for char in pairs(sv.charActive) do sv.charActive[char] = name end
     sv.charActive[CharKey()] = name
@@ -1397,7 +1473,7 @@ end
 
 function ns.CopyProfile(src, name, overwrite)
     local sv = DB()
-    if type(sv.profiles[src]) ~= "table" then return false, ERR_NO_PROFILE end
+    if type(sv.profiles[src]) ~= "table" then return false, ns.L(ERR_NO_PROFILE) end
     local err
     name, err = ValidName(name, overwrite)
     if not name then return false, err end
@@ -1411,7 +1487,7 @@ end
 
 function ns.ResetProfileNamed(name)
     local sv = DB()
-    if type(sv.profiles[name]) ~= "table" then return false, ERR_NO_PROFILE end
+    if type(sv.profiles[name]) ~= "table" then return false, ns.L(ERR_NO_PROFILE) end
     if name == sv.charActive[CharKey()] then
         ns.SettingsRoot().tankReminder = nil
         return true
@@ -1437,8 +1513,8 @@ end
 
 function ns.DeleteProfile(name)
     local sv = DB()
-    if type(sv.profiles[name]) ~= "table" then return false, ERR_NO_PROFILE end
-    if CountProfiles(sv) <= 1 then return false, "the last profile cannot be deleted" end
+    if type(sv.profiles[name]) ~= "table" then return false, ns.L(ERR_NO_PROFILE) end
+    if CountProfiles(sv) <= 1 then return false, ns.L("the last profile cannot be deleted") end
     local wasMine = sv.charActive[CharKey()] == name
     sv.profiles[name] = nil
     local fallback = FallbackProfile(sv)

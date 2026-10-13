@@ -22,20 +22,21 @@ local PIN_RANGE = ns.Shared.Style.PIN_SIZE_RANGE
 local SKYBORNE = "Skyborne"
 
 local KINDS = {
-    leyline = { name = "Ley Line", faction = "Alliance", racial = 1259705, buff = 1259691,
-        help = "Stand on it and cast Read Ley Line.",
+    leyline = { name = ns.L("Ley Line"), faction = "Alliance", racial = 1259705, buff = 1259691,
+        help = ns.L("Stand on it and cast Read Ley Line."),
         icon = "Interface\\Icons\\Spell_Arcane_Arcane04" },
-    convergence = { name = "Elemental Convergence", faction = "Horde", racial = 1259686, buff = 1270893,
-        help = "Cast Skysight here for Elemental Blessing.",
+    convergence = { name = ns.L("Elemental Convergence"), faction = "Horde", racial = 1259686, buff = 1270893,
+        help = ns.L("Cast Skysight here for Elemental Blessing."),
         icon = "Interface\\Icons\\Spell_Nature_LightningShield" },
 }
 
-local TEXT_SAVED = "%s saved on your map: %s %.1f, %.1f."
+local TEXT_SAVED = ns.L("%s saved on your map: %s %.1f, %.1f.")
 local TEXT_UNKNOWN_MAP = "?"
-local TEXT_CLICK = "Click for a waypoint."
-local TEXT_FORGET = "Right-click to forget this spot."
+local TEXT_CLICK = ns.L("Click for a waypoint.")
+local TEXT_FORGET = ns.L("Right-click to forget this spot.")
 local SECTION_ORDER = 60
 local TEXT_SECTION = "Skyborne"
+local TEXT_OFF = "Skyborne Spots off"
 
 local waiting
 local events
@@ -54,6 +55,10 @@ local function MyKind()
     for key, kind in pairs(KINDS) do
         if kind.faction == faction then return key end
     end
+end
+
+local function NotSkyborne()
+    return MyKind() == nil
 end
 
 local function Found(kind)
@@ -337,7 +342,7 @@ boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", Apply)
 
 table.insert(ns.Shared.MapPins, {
-    title = TEXT_SECTION, order = SECTION_ORDER, store = S, switch = "mapSkyborne",
+    title = TEXT_SECTION, order = SECTION_ORDER, store = S, switch = "mapSkyborne", hidden = NotSkyborne,
     rows = {
         { key = "mapSkyborne", label = "Skyborne Spots", toggle = true, store = S,
           help = "For Skyborne characters: ley lines (Alliance, for Read Ley Line) or Elemental "
@@ -345,7 +350,7 @@ table.insert(ns.Shared.MapPins, {
               .. "them: the addon knows the ones players have found, and saves each new one you cast "
               .. "your racial on. Other races see no pins." },
         { key = "mapSkyborneSize", label = "Skyborne Pin Size", slider = PIN_RANGE, store = S,
-          needs = "mapSkyborne" },
+          needs = "mapSkyborne", why = TEXT_OFF },
         { label = "Forget Found Spots", buttonText = "Forget All", button = ForgetAll, store = S,
           needs = AnyFound, why = "No spots found yet",
           help = "Forgets every spot this account found. The addon's own list stays.",

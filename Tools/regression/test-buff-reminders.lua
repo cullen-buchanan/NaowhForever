@@ -99,7 +99,7 @@ local function Fixture(opts)
     function S.Raw(k) return settings[k] end
     function S.Default(k) return defaults[k] end
 
-    local ns = { MEDIA = dofile("Tools/regression/core_media.lua"),
+    local ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower, MEDIA = dofile("Tools/regression/core_media.lua"),
         AuraBuffSettings = S,
         Apply = function() end,
         ShowUnlockMode = function() end,
@@ -623,6 +623,21 @@ do
     t.Login()
     Check("untimed imbue counts", t.Shown(), "")
     Check("untimed imbue arms nothing", t.Pending(), 0)
+end
+
+-- Weapon Imbue shows the one actually cast, not just the first one trained.
+do
+    local t = Fixture({ units = { player = "SHAMAN" }, known = { [8024] = true, [8017] = true },
+        weapons = { [16] = false } })
+    t.Login()
+    Check("defaults to the first trained imbue", t.Shown(), "spell:8024")
+    Check("listens for the cast", t.Listening("UNIT_SPELLCAST_SUCCEEDED"), true)
+    t.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast1", 8017)
+    t.Advance(0.5)
+    Check("switches to the cast imbue", t.Shown(), "spell:8017")
+    t.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast2", 2842)
+    t.Advance(0.5)
+    Check("casting something else leaves it alone", t.Shown(), "spell:8017")
 end
 
 -- Warn With Minutes Left covers personal buffs, but not one shorter than the warning.

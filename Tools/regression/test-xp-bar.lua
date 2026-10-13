@@ -3,7 +3,7 @@
 -- shows in one spot at a time, the level's three forms counting as one; the texts are
 -- measured again only when one of them changed; and its Played text comes from Shared.Played.
 -- Its look: the defaults draw today's flat bar and outlined texts, and Font, Font Size, Outline,
--- Bar Texture and Background Opacity each apply.
+-- Bar Texture and Background Opacity each apply. It hides in battlegrounds and arenas.
 local checks = 0
 local function check(label, value) assert(value, label); checks = checks + 1 end
 
@@ -19,6 +19,7 @@ end
 local function Consts(source)
     local block = assert(source:match("\n(local MINUTE, HOUR = .-)\n\n"))
     return "local QOL_CONSTANTS = dofile(\"Tools/regression/qol_constants.lua\")\n"
+        .. "local ns = setmetatable({ L = dofile(\"Tools/regression/locale_stub.lua\").L }, { __index = ns })\n"
         .. (block:gsub("ns%.QoLConstants%.", "QOL_CONSTANTS.")) .. "\n"
 end
 
@@ -48,7 +49,7 @@ do
         .. assert(source:match("(local function SetColour%(.-\nend\n\nlocal function ColourRow%(.-\nend)\n"))
     local S = Settings({})
     local accent = { r = 0, g = 0x91 / 255, b = 0xed / 255 }
-    local ns = { XPBarDefaultColor = function() return accent end }
+    local ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower, XPBarDefaultColor = function() return accent end }
     function ns.XPBarColor(k) return S.Get(k) or accent end
     local ColourRow = Load(chunk .. "\nreturn ColourRow", { S = S, ns = ns })
     local row = ColourRow("xpBarFillColor", "Fill Color")
@@ -129,7 +130,7 @@ do
     chat1.events.TIME_PLAYED_MSG = true
     local frame
     local env = {
-        NaowhForever = { Shared = {} },
+        NaowhForever = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower, Shared = {} },
         GetTime = function() return now end,
         UnitLevel = function() return level end,
         CreateFrame = function() made = made + 1; frame = Frame(); return frame end,
@@ -177,7 +178,7 @@ do
     local chunk = Consts(source) .. assert(source:match("(local function Duration%(seconds%).-\nend)\n"))
         .. "\n" .. assert(source:match("(local function SlotText%(which, maxed, max%).-\nend)\n"))
     local SlotText = Load(chunk .. "\nreturn SlotText", { Played = Played, sessionStart = 0,
-        time = function() return 0 end, ns = { Color = function() return "" end } })
+        time = function() return 0 end, ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower, Color = function() return "" end } })
     check("the bar's Played text, from the helper", SlotText("played", false, 1)
         == "Played:|r 4d 6h 22m|r - This Level:|r 0m|r")
 
@@ -212,7 +213,7 @@ do
     local b = { fill = Tex(), done = Tex(), open = Tex(), rested = Tex(), bg = Tex(), edge = Tex() }
     local env = { S = S, T = { accent = { r = 0, g = 0.5, b = 1 }, bg = { r = 0.1, g = 0.1, b = 0.1 } },
         CreateColor = function(r, g, bl, a) return { r = r, g = g, b = bl, a = a } end,
-        ns = { ThemeTint = function(_, c) return c end, Shared = { Style = dofile("Tools/regression/shared_style.lua") },
+        ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower, ThemeTint = function(_, c) return c end, Shared = { Style = dofile("Tools/regression/shared_style.lua") },
             UI = { TexturePath = function(name, own) if name == "" then return own end return "lsm:" .. name end } } }
     local PaintBar = Load(chunk .. "\nreturn PaintBar", env)
     PaintBar(b)
@@ -253,6 +254,27 @@ do
     S.Set("xpBarFontSize", 16)
     FitSlots(slots, 500, function() end)
     check("Font, Outline and Font Size apply around the bar", slots[2].font == "Arial 16 " and slots[5].font == "Arial 16 ")
+end
+
+-- Battlegrounds and arenas: the bar is hidden there, checked again on every loading screen and
+-- when it is turned on.
+do
+    local source = Read("NaowhForever_QoL/XP/XPBar.lua")
+    local chunk = assert(source:match("\n(local PVP_INSTANCES = .-)\n"))
+        .. "\n" .. assert(source:match("(local function InPvP%(%).-\nend)\n"))
+    local kind
+    local env = { IsInInstance = function() return kind ~= "none", kind end }
+    Load(chunk .. "\nInPvPFn = InPvP", env)
+    for where, hidden in pairs({ pvp = true, arena = true, none = false, party = false, raid = false,
+        scenario = false }) do
+        kind = where
+        check(("%s: hidden is %s"):format(where, tostring(hidden)), env.InPvPFn() == hidden)
+    end
+    check("every loading screen checks again", source:match("local EVENTS = {[^}]-\"PLAYER_ENTERING_WORLD\"")
+        and source:find('if event == "PLAYER_ENTERING_WORLD" then\n        inPvP = InPvP()', 1, true))
+    check("turning it on checks too", source:match("local function Apply%(%).-inPvP = InPvP%(%).-\nend\n"))
+    check("in PvP it hides, except in the HUD Editor",
+        source:find('if not unlocked and (inPvP or (maxed and not S.Get("xpBarMaxLevel"))) then', 1, true))
 end
 
 print(("test-xp-bar: %d checks passed"):format(checks))

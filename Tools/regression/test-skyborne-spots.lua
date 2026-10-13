@@ -16,7 +16,7 @@ local LEY_CAST, LEY_BUFF, SKY_CAST, SKY_BUFF = 1259705, 1259691, 1259686, 127089
 local settings = { enabled = true, mapSkyborne = true, mapSkyborneSize = 20 }
 local S = { Get = function(key) return settings[key] end, Set = function() end }
 local account, printed = {}, {}
-local ns = {
+local ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower,
     QoLConstants = dofile("Tools/regression/qol_constants.lua"),
     QoLSettings = S,
     Apply = function() end,
@@ -127,7 +127,7 @@ Check(Read("Core/Settings.lua"):find("mapSkyborne = F.mapSkyborne,", 1, true)
     and Read("Core/Features.lua"):find("mapSkyborne = false,", 1, true), "Skyborne Spots starts off")
 local section = ns.Shared.MapPins[1]
 Check(section and section.switch == "mapSkyborne" and section.store == S and section.rows[1].key == "mapSkyborne",
-    "its section on Map Options and Pins switches the setting")
+    "its section on Map & Pins switches the setting")
 Check(section.rows[2].key == "mapSkyborneSize" and section.rows[2].needs == "mapSkyborne", "the pin size waits for the switch")
 
 local function CastAt(spellID, buffID, duration)

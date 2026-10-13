@@ -15,7 +15,7 @@ local Secret = CB.Secret
 local NONE_COLOR = St.RED_RGB
 local BG_COLOR = St.BORDER_RGB
 local TIMER_LIFT = 2
-local TEXT_NONE = "NONE"
+local TEXT_NONE = ns.L("NONE")
 local CUSTOM_POINT = "TOP"
 
 function CB.Decorate(cell)
@@ -72,14 +72,9 @@ local function FitNone(cell, size)
     end
 end
 
-local function EntryIcon(entry)
-    local item = CB.Resolve(entry)
-    return item and C_Item.GetItemIconByID(item) or C.EMPTY_ICON
-end
-
 function CB.StyleCell(cell, entry, size)
     cell:SetSize(size, size)
-    cell.icon:SetTexture(EntryIcon(entry))
+    cell.icon:SetTexture(CB.EntryIcon(entry))
     ItemBar.StyleTexts(cell, S, CB.PREFIX)
     PlaceCustom(cell, entry)
     FitNone(cell, size)
@@ -94,6 +89,20 @@ function CB.ShowCount(cell, itemID, faded)
     cell.icon:SetDesaturated(count == 0)
     cell.empty = count == 0 and hideEmpty
     cell:SetAlpha(cell.empty and faded or 1)
+end
+
+function CB.Out(entry)
+    if not S.Get("consumableBarHideEmpty") or CB.unlocked then return false end
+    local itemID = CB.Resolve(entry)
+    return not itemID or GetItemCount(itemID) == 0
+end
+
+function CB.ShownItems()
+    local shown = {}
+    for _, entry in ipairs(CB.Items()) do
+        if not CB.Out(entry) then shown[#shown + 1] = entry end
+    end
+    return shown
 end
 
 function CB.ShowCooldown(cell, itemID)

@@ -29,7 +29,9 @@ local BESIDE = { LEFT, RIGHT }
 local SAME_TEXT = { levelshort = "level", levelnum = "level" }
 local BLIZZARD_BARS = { "MainMenuExpBar", "ExhaustionTick" }
 local EVENTS = { "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP", "UPDATE_EXHAUSTION", "PLAYER_UPDATE_RESTING",
-    "QUEST_LOG_UPDATE", "DISABLE_XP_GAIN", "ENABLE_XP_GAIN", "PLAYER_LOGOUT", "MODIFIER_STATE_CHANGED" }
+    "QUEST_LOG_UPDATE", "DISABLE_XP_GAIN", "ENABLE_XP_GAIN", "PLAYER_LOGOUT", "MODIFIER_STATE_CHANGED",
+    "PLAYER_ENTERING_WORLD" }
+local PVP_INSTANCES = { pvp = true, arena = true }
 local SLOTS = {
     { key = "xpBarTopLeft", label = "Top Left", point = "BOTTOMLEFT", rel = "TOPLEFT", y = SLOT_DROP,
       justify = "LEFT" },
@@ -73,13 +75,13 @@ local SLOT_TEXTS = {
     order = { "none", "played", "session", "completed", "completedxp", "rested", "leveling", "xphour" },
 }
 local TEXT = {
-    PLAYED = "Played:|r ",
-    THIS_LEVEL = "This Level:|r ",
-    SESSION = "Session:|r ",
-    COMPLETED = "Completed Quests:|r ",
-    RESTED = "Rested:|r ",
-    TO_LEVEL = "Time to Level:|r ",
-    XP_HOUR = "XP/Hour:|r ",
+    PLAYED = ns.L("Played:|r "),
+    THIS_LEVEL = ns.L("This Level:|r "),
+    SESSION = ns.L("Session:|r "),
+    COMPLETED = ns.L("Completed Quests:|r "),
+    RESTED = ns.L("Rested:|r "),
+    TO_LEVEL = ns.L("Time to Level:|r "),
+    XP_HOUR = ns.L("XP/Hour:|r "),
     PART = "|r - ",
     PERCENT = "%.1f%%",
     NO_RATE = "--",
@@ -88,20 +90,20 @@ local TEXT = {
     MINUTES = "%dm",
     MILLIONS = "%.1fm",
     THOUSANDS = "%.1fk",
-    LEVEL = "Level ",
-    LVL = "Lvl ",
-    MAX_LEVEL = "Max Level",
+    LEVEL = ns.L("Level "),
+    LVL = ns.L("Lvl "),
+    MAX_LEVEL = ns.L("Max Level"),
     OF = " / ",
-    RESTED_SHARE = "Rested %.1f%%",
+    RESTED_SHARE = ns.L("Rested %.1f%%"),
     RESET_COLORS = "Put the XP Bar colors back to their defaults?",
     RESET_LAYOUT = "Put the XP Bar's size and texts back to their defaults?",
     MOVER = "XP Bar",
-    PREVIEW_NOTE = "Click a text on the bar, or a spot around it, to change what it shows.",
-    ON = "(on ",
-    CHANGE = "|nClick to change.",
+    PREVIEW_NOTE = ns.L("Click a text on the bar, or a spot around it, to change what it shows."),
+    ON = ns.L("(on "),
+    CHANGE = ns.L("|nClick to change."),
     ADD = "+ ",
     SUMMARY = "%d by %d%s",
-    AT_MAX = ", shown at max level",
+    AT_MAX = ns.L(", shown at max level"),
 }
 
 local FILL_FROM = CreateColor(0x00 / 255, 0x4f / 255, 0x85 / 255, 1)
@@ -215,7 +217,7 @@ function ns.ResetXPBarColors()
 end
 ns.XPBarMinWidth = MIN_WIDTH
 
-local bar, clock, unlocked, questTimer
+local bar, clock, unlocked, questTimer, inPvP
 local sessionStart, sessionXP = nil, 0
 local lastXP, lastXPMax
 local questDone, questOpen = 0, 0
@@ -246,6 +248,11 @@ end
 
 local function On()
     return S.Get("enabled") and S.Get("xpBar")
+end
+
+local function InPvP()
+    local _, kind = IsInInstance()
+    return PVP_INSTANCES[kind] == true
 end
 
 local function AtMaxLevel()
@@ -652,7 +659,7 @@ end
 local function Update()
     if not bar then return end
     local maxed = AtMaxLevel()
-    if not unlocked and maxed and not S.Get("xpBarMaxLevel") then
+    if not unlocked and (inPvP or (maxed and not S.Get("xpBarMaxLevel"))) then
         bar:Hide()
         return
     end
@@ -714,7 +721,9 @@ events:SetScript("OnEvent", function(_, event)
         bar:EnableMouse(IsControlKeyDown())
         return
     end
-    if event == "PLAYER_LEVEL_UP" then
+    if event == "PLAYER_ENTERING_WORLD" then
+        inPvP = InPvP()
+    elseif event == "PLAYER_LEVEL_UP" then
         QueueQuestScan()
     elseif event == "PLAYER_XP_UPDATE" then
         CountXP()
@@ -771,6 +780,7 @@ local function Apply()
     Place()
 
     lastXP, lastXPMax = UnitXP("player"), UnitXPMax("player")
+    inPvP = InPvP()
     for _, e in ipairs(EVENTS) do events:RegisterEvent(e) end
     if ShowsText("played") then Played.Want("xpBar") else Played.Drop("xpBar") end
     if not clock then clock = C_Timer.NewTicker(CLOCK_TICK, Update) end
@@ -822,8 +832,8 @@ end
 
 local PREVIEW_HOVER_ALPHA = 0.15
 local ZONE_PAD = 4
-local SLOT_HINT = "|n|nCompleted Quests (both), Rested Experience, Time to Level and XP per Hour are "
-    .. "hidden at max level."
+local SLOT_HINT = ns.L("|n|nCompleted Quests (both), Rested Experience, Time to Level and XP per Hour are "
+    .. "hidden at max level.")
 
 local function OpenChoices(zone)
     if zone._menu and zone._menu:IsShown() then
@@ -843,9 +853,9 @@ local function OpenChoices(zone)
     local muted = ns.Color("muted")
     for _, k in ipairs(zone._choices.order) do
         local key = k
-        local name = zone._choices.values[key]
+        local name = ns.L(zone._choices.values[key])
         local at = key ~= "none" and shownAt[TextOf(key)]
-        if at then name = name .. " " .. muted .. TEXT.ON .. at .. ")|r" end
+        if at then name = name .. " " .. muted .. TEXT.ON .. ns.L(at) .. ")|r" end
         desc:CreateRadio(name,
             function() return S.Get(zone._key) == key end,
             function()
@@ -977,11 +987,11 @@ end
 
 local Group = ns.Shared.Settings.Group
 local SAME_COLOUR = 1 / 255
-local BAR_TEXT_HELP = "A text on the bar: click it on the preview to change it. Each text shows in one "
-    .. "place on the bar: picking one shown elsewhere moves it there."
-local SLOT_TEXT_HELP = "A text around the bar: click it on the preview to change it. Each text shows in "
+local BAR_TEXT_HELP = ns.L("A text on the bar: click it on the preview to change it. Each text shows in one "
+    .. "place on the bar: picking one shown elsewhere moves it there.")
+local SLOT_TEXT_HELP = ns.L("A text around the bar: click it on the preview to change it. Each text shows in "
     .. "one place around it: picking one shown elsewhere moves it there. Completed Quests (both), Rested Experience, Time to Level and "
-    .. "XP per Hour are hidden at max level."
+    .. "XP per Hour are hidden at max level.")
 
 local function SetColour(key, r, g, b)
     local d = ns.XPBarDefaultColor(key)

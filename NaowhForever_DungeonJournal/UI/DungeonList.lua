@@ -22,20 +22,21 @@ local HERE_DOT = 5
 local HERE_LEFT = LP.SELECTED_BAR + (LP.MARK_GAP - HERE_DOT) / 2
 local NAME_GAP, BIS_GAP, ICON_RIGHT = 8, 8, 8
 local CONTESTED_RGB = { r = 0xe6 / 255, g = 0xcc / 255, b = 0x80 / 255 }
-local GROUPS = { "For your level", "Coming up", "Raids", "Behind you" }
+local GROUPS = { "For your level", "Coming up", "Raids", "Low level" }
 local CLOSED_KEYS = { "closedGroup1", "closedGroup2", "closedGroup4", "closedGroup3" }
-local FOR_YOUR_LEVEL, COMING_UP, RAIDS, BEHIND_YOU = 1, 2, 3, 4
+local FOR_YOUR_LEVEL, COMING_UP, RAIDS, LOW_LEVEL = 1, 2, 3, 4
+local ORDER = { LOW_LEVEL, FOR_YOUR_LEVEL, COMING_UP, RAIDS }
 local CONTESTED_SIDE = "Contested"
 
-local TEXT_HERE = "You are here"
+local TEXT_HERE = ns.L("You are here")
 local TEXT_ZONE = "%s  %s%s|r"
-local TEXT_RAID = "A raid for %d players"
-local TEXT_LEVEL = "Level "
-local TEXT_NO_BOSSES = "No boss data for it yet."
-local TEXT_TO_PICK_UP = "%d |4quest:quests; to pick up"
-local TEXT_IN_LOG = "%d in your log"
-local TEXT_BIS = "%s%d of your %d BiS here are yours|r"
-local TEXT_LOOKS = "%s%d new |4look:looks;|r"
+local TEXT_RAID = ns.L("A raid for %d players")
+local TEXT_LEVEL = ns.L("Level ")
+local TEXT_NO_BOSSES = ns.L("No boss data for it yet.")
+local TEXT_TO_PICK_UP = ns.L("%d |4quest:quests; to pick up")
+local TEXT_IN_LOG = ns.L("%d in your log")
+local TEXT_BIS = ns.L("%s%d of your %d BiS here are yours|r")
+local TEXT_LOOKS = ns.L("%s%d new |4look:looks;|r")
 local TEXT_DONE_GAP = "  "
 
 local rows, groups = {}, {}
@@ -48,7 +49,7 @@ local function Group(dungeon)
     local levels = J.Levels(dungeon)
     local level = UnitLevel("player")
     if not levels or level < levels[1] then return COMING_UP end
-    if level > levels[2] then return BEHIND_YOU end
+    if level > levels[2] then return LOW_LEVEL end
     return FOR_YOUR_LEVEL
 end
 
@@ -253,7 +254,7 @@ function List.Build(parent, select)
     onSelect = select
     scroll, content = LP.NewScroll(parent)
     for g, text in ipairs(GROUPS) do
-        groups[g] = LP.Header(content, text, GroupClicked)
+        groups[g] = LP.Header(content, ns.L(text), GroupClicked)
         groups[g].group = g
     end
     for i, dungeon in ipairs(J.Dungeons()) do rows[i] = Row(content, dungeon) end
@@ -261,7 +262,7 @@ end
 
 function List.Layout()
     local y = 0
-    for g, header in ipairs(groups) do y = LayoutGroup(g, header, y) end
+    for _, g in ipairs(ORDER) do y = LayoutGroup(g, groups[g], y) end
     content:SetHeight(math.max(1, y))
 end
 

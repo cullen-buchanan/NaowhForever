@@ -30,10 +30,10 @@ local GLOW_TEXTURE = St.WHITE
 local HOLDER_NAME = "NaowhForeverBiSDropAlert"
 local MOVER_LABEL = "BiS Drop Alert"
 local PAGE, CARD = "BiS List/Settings", "BiS List/Settings:dropAlert"
-local TEXT_PICK = "Your #%d pick"
-local RANK_WORDS = { "Your BiS", "Your second pick" }
+local TEXT_PICK = ns.L("Your #%d pick")
+local RANK_WORDS = { ns.L("Your BiS"), ns.L("Your second pick") }
 local EVENTS = {
-    roll = { "Up for a roll", T.accentSoft }, dropped = { "Dropped", T.fg }, yours = { "Yours!", St.HAVE_RGB },
+    roll = { ns.L("Up for a roll"), T.accentSoft }, dropped = { ns.L("Dropped"), T.fg }, yours = { ns.L("Yours!"), St.HAVE_RGB },
 }
 
 local parts = {}
@@ -61,7 +61,7 @@ local function Detail(id, rank, event, slot)
     if S.Get("bisToastRank") then
         parts[#parts + 1] = ns.Color(Parts.RankColor(rank), RANK_WORDS[rank] or TEXT_PICK:format(rank))
     end
-    if S.Get("bisToastSlot") and slot then parts[#parts + 1] = ns.L(Items.SLOT_NAME[slot]) end
+    if S.Get("bisToastSlot") and slot then parts[#parts + 1] = Items.SlotName(slot) end
     if S.Get("bisToastSource") then AddSource(id) end
     local gain = S.Get("bisToastGain") and Gain(id, slot)
     if gain then parts[#parts + 1] = St.UPGRADE_CODE .. "+" .. math.floor(gain + ROUND) .. "%|r" end

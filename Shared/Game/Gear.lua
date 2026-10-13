@@ -13,8 +13,8 @@ local FACT_CLASS, FACT_SUBCLASS, FACT_REQUIRED = 1, 2, 4
 local TWO_HAND = "INVTYPE_2HWEAPON"
 
 local GEAR_SLOTS = {
-    { 1, "Head" }, { 2, "Neck" }, { 3, "Shoulder" }, { 15, "Back" }, { 5, "Chest" }, { 9, "Wrist" },
-    { 10, "Hands" }, { 6, "Waist" }, { 7, "Legs" }, { 8, "Feet" },
+    { 1, "Head" }, { 2, "Neck" }, { 3, "Shoulder" }, { 15, "Back", "Back (slot)" }, { 5, "Chest" },
+    { 9, "Wrist" }, { 10, "Hands" }, { 6, "Waist" }, { 7, "Legs" }, { 8, "Feet" },
     { 11, "Ring 1" }, { 12, "Ring 2" }, { 13, "Trinket 1" }, { 14, "Trinket 2" },
     { 16, "Main Hand" }, { 17, "Off Hand" }, { 18, "Ranged" },
 }
@@ -36,7 +36,7 @@ local ONE_HAND_ONLY = { INVTYPE_WEAPONMAINHAND = "MH", INVTYPE_WEAPONOFFHAND = "
 local WEAPON_SHORT = {
     [0] = { "Axe", "1h" }, [1] = { "Axe", "2h" }, [2] = { "Bow" }, [3] = { "Gun" },
     [4] = { "Mace", "1h" }, [5] = { "Mace", "2h" }, [6] = { "Polearm" }, [7] = { "Sword", "1h" },
-    [8] = { "Sword", "2h" }, [10] = { "Staff" }, [13] = { "Fist Weapon" }, [15] = { "Dagger" },
+    [8] = { "Sword", "2h" }, [10] = { "Staff" }, [13] = { ns.L("Fist Weapon") }, [15] = { "Dagger" },
     [16] = { "Thrown" }, [18] = { "Crossbow" }, [19] = { "Wand" },
 }
 
@@ -79,8 +79,13 @@ end
 
 Items.GEAR_SLOTS = GEAR_SLOTS
 Items.SLOT_NAME = {}
-for _, s in ipairs(GEAR_SLOTS) do Items.SLOT_NAME[s[1]] = s[2] end
+local SLOT_KEY = {}
+for _, s in ipairs(GEAR_SLOTS) do Items.SLOT_NAME[s[1]], SLOT_KEY[s[1]] = s[2], s[3] or s[2] end
 Items.ONE_HAND_ONLY = ONE_HAND_ONLY
+
+function Items.SlotName(slot)
+    return SLOT_KEY[slot] and ns.L(SLOT_KEY[slot])
+end
 
 function Items.SlotsFor(itemID)
     local _, _, _, equipLoc = GetItemInfoInstant(itemID)
@@ -115,7 +120,7 @@ function Items.WeaponName(subclass, equipLoc)
     local byHand = ByHand(subclass)
     local name = byHand[hand]
     if name then return name end
-    name = hand ~= "" and hand .. " " .. short[1] or short[1]
+    name = hand ~= "" and hand .. " " .. ns.L(short[1]) or ns.L(short[1])
     byHand[hand] = name
     return name
 end

@@ -1,5 +1,5 @@
 -- Run with Lua 5.1 from the repository root: while ns.FEATURE_BADGES is 0, no text a player can
--- see names Patreon, supporters, patrons or the Legendary Supporters; the team's badges may show.
+-- see names Patreon, supporters, patrons or the Legendary or Epic Supporters; the team's badges may show.
 -- Every string in the files the TOC loads is scanned; the few that carry those words must sit in
 -- a file whose gate is checked here, by loading it with the flag at 0 (none shown) and at 1.
 local TocFiles = dofile("Tools/regression/toc_files.lua")
@@ -8,7 +8,7 @@ local Load = dofile("Tools/regression/load_files.lua")
 local checks = 0
 local function check(label, value) assert(value, label); checks = checks + 1 end
 
-local WORDS = { "patreon", "supporter", "legendary supporters", "patron" }
+local WORDS = { "patreon", "supporter", "legendary supporters", "epic supporters", "patron" }
 
 local function Mentions(text)
     local lower = tostring(text):lower()
@@ -108,7 +108,7 @@ end
 
 local scanned, hitFiles = 0, {}
 for _, path in ipairs(TOC_LUA) do
-    local f = not path:find("^Libs/") and io.open(path, "rb")
+    local f = not path:find("^Libs/") and not path:find("^Core/Locales/") and not path:find("^NaowhForever_%a%a%a%a/") and io.open(path, "rb")
     if f then
         local src = f:read("*a")
         f:close()
@@ -156,7 +156,7 @@ local function Shown(flag)
     local cards, infos, registered = {}, {}, {}
     local store = { Get = function() return true end, Default = function() return true end, OnChange = NOTHING }
     local ns
-    ns = {
+    ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower,
         FEATURE_BADGES = flag, BADGES_LIVE = 1, LINKS = {}, MEDIA = dofile("Tools/regression/core_media.lua"), CODE_BUILD = "test", THEME = setmetatable({}, { __index = function() return COLOR end }),
         QoLSettings = store, Apply = NOTHING,
         BADGE_STAFF = { [1] = { [TEAM_GUID] = "developer" } },
@@ -211,8 +211,11 @@ local function Shown(flag)
         wipe = function(t) for k in pairs(t) do t[k] = nil end return t end,
         strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end,
         date = os.date,
+        -- The patron is of the other faction, whose badges show as listed, with no whisper to confirm.
+        UnitFactionGroup = function() return "Alliance" end,
+        GetPlayerInfoByGUID = function(guid) if guid == "Player-1-PATRON" then return nil, nil, nil, "Orc" end end,
     }, { __index = _G })
-    Load({ Located("Core/Badges/Badges.lua"), Located("CharacterPanel/UI/SettingsPage.lua"),
+    Load({ Located("Core/Badges/Confirm.lua"), Located("Core/Badges/Badges.lua"), Located("CharacterPanel/UI/SettingsPage.lua"),
         Located("InspectPanel/UI/SettingsPage.lua"),
         Located("Core/Pages/Credits.lua"), Located("Core/Pages/PatchNotes.lua") }, env)
     ns.BuildCreditsPage({ GetWidth = function() return 800 end }, 0)
@@ -273,7 +276,8 @@ local joined = table.concat(on, "\n"):lower()
 for _, word in ipairs(WORDS) do
     check("flag 1: the words are back (" .. word .. ")", joined:find(word, 1, true) ~= nil)
 end
-check("flag 1: the patron tier is back", onNs.BadgeOf("Player-1-PATRON") == onNs.BADGE_TIERS.legendary)
+check("flag 1: the patron tiers are back", onNs.BadgeOf("Player-1-PATRON") == onNs.BADGE_TIERS.legendary
+    and onNs.BADGE_TIERS.epic ~= nil)
 check("flag 1: one more patch note line, and the Supporter Badges card", #on > #off)
 
 print(("test-support-mentions: %d checks passed"):format(checks))

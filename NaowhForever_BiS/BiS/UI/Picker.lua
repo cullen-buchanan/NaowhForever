@@ -13,9 +13,9 @@ local PADS = 3
 local HINT_X = 7
 local FULL_OPACITY = 1
 local TEXT_ADD = "Add"
-local TEXT_HINT = "Item ID, link or Wowhead URL"
-local TEXT_NO_ITEM = "There is no item with that ID."
-local TEXT_WRONG_SLOT = "%s does not go in the %s slot."
+local TEXT_HINT = ns.L("Item ID, link or Wowhead URL")
+local TEXT_NO_ITEM = ns.L("There is no item with that ID.")
+local TEXT_WRONG_SLOT = ns.L("%s does not go in the %s slot.")
 
 local panel, box
 
@@ -25,7 +25,7 @@ end
 
 local function Title(slot)
     local spec = L.CurrentSpec()
-    return ns.L(Items.SLOT_NAME[slot]) .. (spec and ns.Color("muted", PLACE_DOT .. spec.name) or "")
+    return Items.SlotName(slot) .. (spec and ns.Color("muted", PLACE_DOT .. spec.name) or "")
 end
 
 local function AddFromBox()
@@ -33,7 +33,7 @@ local function AddFromBox()
     local id = Items.IDFrom(box:GetText())
     if not (id and C_Item.GetItemInfoInstant(id)) then return ns.Print(TEXT_NO_ITEM) end
     if not Items.Fits(id, slot) then
-        return ns.Print(TEXT_WRONG_SLOT:format(Items.Name(id), ns.L(Items.SLOT_NAME[slot])))
+        return ns.Print(TEXT_WRONG_SLOT:format(Items.Name(id), Items.SlotName(slot)))
     end
     box:SetText("")
     box:ClearFocus()

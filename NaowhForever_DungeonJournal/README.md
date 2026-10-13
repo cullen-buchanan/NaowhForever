@@ -463,7 +463,9 @@ the game's own tables, and what they can't settle is listed in the pull request 
   for the other states; its newer in-progress icon, a speech bubble with dots, did not read as
   a quest.
 - The dungeon list's group settings keep the names they were made with: `closedGroup3` is
-  Behind you, `closedGroup4` the raids.
+  Low level (once called Behind you), `closedGroup4` the raids. Low level comes first (`ORDER`),
+  closed by default: the dungeons you outleveled are one click away without pushing your
+  level's down.
 - A faction's unlocked count is kept until your standing or the filters that decide it change;
   with Missing BiS Only (which follows your bags) it is counted each time.
 - The window's search runs once typing pauses (`SEARCH_DELAY`), from two letters. Up, Down and
@@ -484,8 +486,8 @@ the game's own tables, and what they can't settle is listed in the pull request 
   entrance pins want their clicks, so theirs does nothing. Pins acquired in combat taint the map,
   so a redraw asked for then waits for combat to end; changing only their size is safe. A pin's
   size follows its kind of map, largest on a zone's, and stays the same on screen as the map
-  zooms (`ns.Shared.ScalePin`). Its switch and Entrance Icon Size are rows on QoL's Map Options and Pins card
-  and drawer (`ns.Shared.MapPins`); the keys stay in the Journal's store.
+  zooms (`ns.Shared.ScalePin`). Its switch and Entrance Icon Size (a pin size number like the other pins' sizes, saved as the fraction `mapEntranceScale`, 20 being 1) are rows on the Map Pins card of QoL's Map & Pins tab
+  (`ns.Shared.MapPins`); the keys stay in the Journal's store.
 - The game's quest tracker is faded with `SetAlpha`, never hidden: it is an Edit Mode frame with
   secure quest item buttons.
 - The quest tracker scrolls past 70% of the screen's height at its scale, and 420 at the least.

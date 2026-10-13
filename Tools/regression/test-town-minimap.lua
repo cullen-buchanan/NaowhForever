@@ -14,13 +14,14 @@ local function Check(ok, label) assert(ok, label); checks = checks + 1 end
 
 local settings = { enabled = true, townMap = true, townMinimap = false, townMail = false, townSpiritHealers = false }
 local S = { Get = function(key) return settings[key] end, Set = function() end }
-local ns = {
+local ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower,
     QoLConstants = dofile("Tools/regression/qol_constants.lua"),
     QoLSettings = S, Apply = function() end, ThemeTint = function() end,
     TownCapitals = {}, TownNPCs = {},
     TownMailboxes = { [1] = { { 55, 50, "mail", "Mailbox", "", nil, "AH" }, { 50, 30, "mail", "Mailbox", "", nil, "AH" } } },
     TownSpiritHealers = { [1] = { { 50, 55, "spirit", "Spirit Healer", "Graveyard", nil, "AH" } } },
-    Shared = { Settings = { Group = function() end, Page = function() return { Card = function() end } end } },
+    Shared = { Style = dofile("Tools/regression/shared_style.lua"),
+        Settings = { Group = function() end, Page = function() return { Card = function() end } end } },
 }
 
 local frames = {}

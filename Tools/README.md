@@ -19,6 +19,7 @@ and ship the result as plain Lua data. The scripts keep that repeatable.
 | `release/` | Release, the daily build watch and the daily badge sync, run by the workflows. |
 | `hooks/` | The checks pre-commit and the workflows run. |
 | `regression/` | Offline Lua tests against stubs. |
+| `nav/` | The walking maps Journeys plans walks on, baked from the client's terrain (Node; see `nav/README.md`). |
 | `tests/` | Python tests for the tools. |
 | `paths.py` | Where the tools, their data and the addon are. |
 
@@ -35,7 +36,7 @@ purpose.
 
 | Tool | What it does | Why |
 | --- | --- | --- |
-| `journal.py` | Builds every dungeon's bosses and loot into `NaowhForever_DungeonJournal/Data/`. `--offline` asks Wowhead nothing (its cache and the game's tables only), for CI. | The heart of the Journal. How it decides what a boss drops is drawn in `NaowhForever_DungeonJournal/README.md`. |
+| `journal.py` | Builds every dungeon's bosses and loot into `NaowhForever_DungeonJournal/Data/`. `--offline` asks Wowhead nothing (its cache and the game's tables only); `--refresh-drops` reads every boss's drops again for today's chances (both daily in CI). | The heart of the Journal. How it decides what a boss drops is drawn in `NaowhForever_DungeonJournal/README.md`. |
 | `factions.py` | Builds the Reputation and PvP tabs from `data/journal_factions.json` and the game's own item tables. | Rewards, standings and prices are in the client, so we read them from there, not a website. |
 | `quest_chains.py` | Builds each dungeon quest's chain and what you need first, from Wowhead Forever. | So the Journal can say "do this first". |
 | `abilities.py` | Builds `NaowhForever_DungeonJournal/Data/Abilities.lua` (each boss's spell IDs, each name once) and `BossInfo.lua` (its level, classification, creature type and title) from its Wowhead Forever NPC page. Cached in `data/abilities_cache.json`; `--offline` writes what the cache has. | A boss's page shows its abilities and header. The game gives each spell's name, icon and description. |
@@ -45,7 +46,7 @@ purpose.
 
 | Tool | What it does | Why |
 | --- | --- | --- |
-| `bis_data.py` | Builds `NaowhForever_BiS/BiS/Data/BiS.lua` from wowsrc.com's per-spec BiS pages. Item IDs are cached in `data/bis_item_ids.json`. `--check` says what changed on their pages, `--offline` builds without Wowhead (both daily in CI). | The BiS List's picks, with permission from wowsrc. |
+| `bis_data.py` | Builds `NaowhForever_BiS/BiS/Data/BiS.lua` from wowsrc.com's per-spec BiS pages. Item IDs are cached in `data/bis_item_ids.json`. `--check` says what changed on their pages, `--offline` builds without Wowhead, `--sources-only` fills a new pick's source from Wowhead (all daily in CI). | The BiS List's picks, with permission from wowsrc. |
 | `bis_spots.py` | Builds `NaowhForever_BiS/BiS/Data/Spots.lua`: where the NPC that drops or sells a BiS item stands out in the world, from Wowhead's item and NPC pages. Cached in `data/bis_spots.json`. | The BiS List's Run Next puts a waypoint on them. |
 | `enchants.py` | Builds `NaowhForever_BiS/BiS/Data/Enchants.lua`: every Enchanting recipe, what it gives and goes on, from the game's tables (wago.tools), and the skill it needs and who teaches it, from Wowhead (cached in `data/enchant_recipes.json`). | The BiS List's best enchant for what you wear. |
 | `bis_quests.py` | Builds `NaowhForever_DungeonJournal/Data/BiSQuests.lua`: every quest that rewards a ranked BiS item, from Wowhead's item pages ("Reward from") and quest pages (where it starts, who can take it). Cached in `data/bis_quests.json` and `data/bis_quest_pages.json`. Run `quest_chains.py` after it. | The BiS List's Quests page. |
@@ -77,6 +78,8 @@ purpose.
 | `mailboxes.py` | Builds `NaowhForever_QoL/Interface/TownMailboxes.lua` from Wowhead Forever's mailbox pages (cached in `data/mailbox_cache.json`). | The town map's mailbox pins. |
 | `spirit_healers.py` | Builds `NaowhForever_QoL/Interface/TownSpiritHealers.lua` from the Spirit Healer's Wowhead page. | The game won't list graveyards while you are alive. |
 | `travel.py` | Builds `NaowhForever_QoL/Interface/TownTravel.lua`: the boats' and zeppelins' docks, from the game's taxi paths (wago.tools). | The town map's boat and zeppelin pins. |
+| `journeys.py` | Builds `NaowhForever_Journeys/Data/Network.lua`: every flight point with who can use it, every direct flight's flown length, each boat's and zeppelin's docks with its stop and sailing distance, and the tram and the Darnassus portal, from the game's tables (wago.tools). Run it again when `wago.BUILD` moves on. Lifts are not in the client's tables: they go in `LIFTS` by hand, from what `/nf lifts` prints in game. | The Journeys planner's network. |
+| `journeys_quests.py` | Builds `NaowhForever_Journeys/Data/QuestSpots.lua`: where each Quest List quest is handed in, and the camps of its objectives, from the map on its Wowhead Forever page. Cached in `data/journeys_quest_spots.json`; `--offline` writes from the cache only. | A tracked quest the game marks nowhere still has somewhere to go. |
 | `zone_exits.py` | Builds `NaowhForever_QoL/Interface/ZoneExits.lua`: where the roads cross from one zone into the next, from Wowhead's zone grid and the game's map tables. | Forever has no map link data. |
 
 ## build/: the rest
@@ -121,7 +124,7 @@ purpose.
 | --- | --- |
 | `release/release.py` | Release helper for `.github/workflows/release.yml`: version bump, notes, changelog (from the merged PRs' descriptions). |
 | `release/watch_build.py` | Compares a new Forever build with ours: faction rewards, kill-count encounters, new dungeons, new dungeon floor maps, new gear the Journal doesn't list yet. `--update` moves us to it. Runs daily in CI (`.github/workflows/daily-watch.yml`), so a new build never sneaks past us. |
-| `release/sync_badges.py` | Writes `Core/Badges/Patrons.lua` from naowh.gg's list of Legendary patrons, daily in `.github/workflows/badges.yml`. |
+| `release/sync_badges.py` | Writes `Core/Badges/Patrons.lua` from naowh.gg's list of Legendary and Epic patrons, daily in `.github/workflows/badges.yml`. |
 | `regression/` | Offline Lua tests against stubs. `bash Tools/regression/run-all.sh` runs them all (set `LUA=` to your lua.exe). `load_files.lua` loads a module's real files into a test, `measure.lua` times a draw and fails on garbage, `toc_files.lua` lists what the TOCs load. |
 | `tests/` | Python tests for the tools: `python -m unittest discover -s Tools/tests`. |
 | `hooks/check-pr.sh` | PR rules: a changelog line in the PR description for addon changes, TOC version untouched. |
@@ -133,15 +136,15 @@ purpose.
 
 - **Every PR** (`checks.yml`, and `pr-title.yml` for the PR rules and title): luacheck and
   pre-commit, the Lua regression tests, the Python tests, PR rules, the title, and a package check.
-- **Daily** (`daily-watch.yml`), three checks, one after another on one branch, each on what
+- **Daily** (`daily-watch.yml`), four checks, one after another on one branch, each on what
   the one before changed. Whatever they change goes in **one** pull request, as one commit (we
   squash merge): its title says what is in it (`chore(data): WoW Forever build 1.60.1.70205,
   boss loot and BiS lists`), its description lists the changes, their lines for players under
   `## Changelog` (labelled `no changelog` when there are none; CHANGELOG.md is left to the
   release), and each check's report folded away (`hooks/daily-pull-request.sh`, which keeps it
   up to date). A check that fails leaves out only its own change, and the run says so. A new
-  BiS pick CI could not find a source for (it may not read Wowhead) keeps the pull request a
-  draft that says what to run on our machines. A change CI cannot make at all (wowsrc lists
+  BiS pick neither wowsrc nor Wowhead has a source for keeps the pull request a draft that
+  says what to do. A change CI cannot make at all (wowsrc lists
   items the game's tables don't have yet) goes in one issue, "Daily data: changes that need a
   run on our machines", with what to run; the first run with nothing stuck closes it. Where
   workflows may not open a pull request, an issue with a one-click link:
@@ -154,13 +157,19 @@ purpose.
     fit's quality, its gates). A manual run reports it too; a failed fit only says so.
   - `loot`: `sources/wowsrc.py --check`. If wowsrc's loot pages changed (a boss gained or lost
     items, a new boss or page), it rebuilds the Journal with `build/journal.py --offline`.
-  - `bis`: `build/bis_data.py --check`, the same for wowsrc's BiS lists.
+  - `drops`: `build/journal.py --refresh-drops`. Every boss's and chest's drops read again from
+    Wowhead Forever, so the chances follow today's kill counts. A change only when a chance
+    moved a whole percent, or an item came or went.
+  - `bis`: `build/bis_data.py --check`, the same for wowsrc's BiS lists, then
+    `build/bis_data.py --sources-only` for a new pick's source from Wowhead.
 
   `--offline` asks Wowhead nothing: a new item's facts come from the game's own tables, and
   what they can't settle (an old classic item) is listed in the PR for a run on our machines.
 - **Daily** (`badges.yml`): `release/sync_badges.py`.
-- **Not in CI:** anything that reads Wowhead. Their terms don't allow scraping it from a
-  server, so a full `build/journal.py` (CI only runs it `--offline`), `build/quest_chains.py`,
+- **Wowhead in CI:** only the daily `drops` check and the BiS sources, one page at a time at
+  `wowhead.fetch`'s pace (a second apart, backing off on a 403). GitHub's runners can read it
+  (checked on 11 Oct 2026). Everything else that reads Wowhead stays off CI and runs on our
+  machines, by hand: `build/quest_chains.py`,
   `build/bis_spots.py`, `build/enchants.py`, `build/bis_quests.py`, `build/abilities.py`,
   `build/boss_quests.py`, the Completo and town map builders that read Wowhead, and
-  `build/forever_new.py` run on our machines, by hand.
+  `build/forever_new.py`.

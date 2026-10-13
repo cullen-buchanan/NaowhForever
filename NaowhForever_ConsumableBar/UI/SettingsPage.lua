@@ -1,4 +1,4 @@
--- SettingsPage.lua: the Consumable Bar's settings page: Edit Items, the bar's look with a preview, adding items, its anchor and its window.
+-- SettingsPage.lua: the Consumable Bar's settings page: Edit Items, the bar's look with a preview, adding items and its Smart Macros, its anchor and its window.
 local ns = _G.NaowhForever
 
 local CB = ns.ConsumableBar
@@ -11,11 +11,13 @@ local Group = Settings.Group
 local STAGE_MIN, STAGE_PAD = 90, 24
 local NOTE_FONT = 12
 local ASK = "Ask to Add New Consumables"
+local HEALTH, FOOD = "NF Health", "NF Food"
+local TEXT_NO_MANA = ns.L("You don't use mana")
 local BAR_NAME = "Consumable Bar"
-local TEXT_EMPTY = "No items yet. Open Edit Items to add some."
-local TEXT_NONE, TEXT_ONE, TEXT_MANY = "No items on the bar yet", "1 item on the bar", "%d items on the bar"
-local TEXT_DETAIL = "Add consumables, put them in order, and set each one up."
-local TEXT_OFF = "Off"
+local TEXT_EMPTY = ns.L("No items yet. Open Edit Items to add some.")
+local TEXT_NONE, TEXT_ONE, TEXT_MANY = ns.L("No items on the bar yet"), ns.L("1 item on the bar"), ns.L("%d items on the bar")
+local TEXT_DETAIL = ns.L("Add consumables, put them in order, and set each one up.")
+local TEXT_OFF = ns.L("Off")
 local DIRECTION = { { RIGHT = "Right", LEFT = "Left", UP = "Up", DOWN = "Down" }, { "RIGHT", "LEFT", "UP", "DOWN" } }
 local SIZE_RANGE, SPACING_RANGE, PER_ROW_RANGE = { 20, 64, 1 }, { 0, 20, 1 }, { 1, 24, 1 }
 local BG_RANGE = { 0, 100, 5 }
@@ -37,7 +39,7 @@ local function NewPreview(stage)
 end
 
 local function PaintPreview(holder, state)
-    local items = CB.Items()
+    local items = CB.ShownItems()
     local size, gap, grow, perRow = CB.Grid()
     local map = CB.KeyMap()
     local combat = state == "combat"
@@ -63,7 +65,7 @@ end
 
 local function StageHeight()
     local size, gap, grow, perRow = CB.Grid()
-    local _, h = ItemBar.Size(#CB.Items(), size, gap, grow, perRow)
+    local _, h = ItemBar.Size(#CB.ShownItems(), size, gap, grow, perRow)
     return math.max(STAGE_MIN, h + 2 * C.BG_PAD + STAGE_PAD)
 end
 
@@ -121,7 +123,7 @@ for _, row in ipairs(ItemBar.TextRows(S, CB.PREFIX)) do barRows[#barRows + 1] = 
 for _, row in ipairs({
     Group("Showing"),
     { key = "consumableBarHideEmpty", label = "Hide When Out", toggle = true,
-      help = "Hides an item you have run out of instead of showing NONE." },
+      help = "Takes an item you have run out of off the bar until you get more." },
     { key = "consumableBarHideCombat", label = "Hide Bar in Combat", toggle = true,
       help = "Hides the whole bar while you are in combat." },
     { key = "consumableBarBackground", label = "Show Background", toggle = true,
@@ -138,6 +140,43 @@ local addingRows = {
       help = "Asks again about the items you said no to." },
 }
 for _, category in ipairs(D.ORDER) do addingRows[#addingRows + 1] = Filter(category) end
+
+local function MacroRow(key, label, help)
+    return { label = label, toggle = true, help = help,
+        get = function() return CB.HasMacro(key) end,
+        set = function(v) CB.SetMacro(key, v) end }
+end
+
+local M = ns.MacroSettings
+local choices = ns.HealthOrderChoices
+if ns.ConsumableMacros and M and choices then
+    addingRows[#addingRows + 1] = Group("Smart Macros")
+    local health = MacroRow("health", HEALTH, "Your best healthstone or healing potion, through NF Health.")
+    health.cog = { title = "Health Priority", tip = "Whether a healthstone or a potion comes first." }
+    local mana = MacroRow("mana", "NF Mana", "Your best mana potion, through NF Mana.")
+    mana.needs, mana.why = ns.UsesMana, TEXT_NO_MANA
+    local food = MacroRow("food", FOOD, "Your best food and drink in one macro, through NF Food.")
+    food.cog = { title = "Food Only", tip = "Whether NF Food leaves drinks to NF Drink." }
+    local drink = MacroRow("drink", "NF Drink", "Your best drink alone, through NF Drink.")
+    drink.needs, drink.why = ns.UsesMana, TEXT_NO_MANA
+    for _, row in ipairs({
+        health,
+        { label = "Use First", choice = { choices.values, choices.order }, under = HEALTH,
+          help = "Whether a healthstone or a potion comes first.",
+          get = function() return M.Get("healthOrder") end,
+          set = function(v) M.Set("healthOrder", v) end },
+        MacroRow("healthstone", "NF Healthstone", "Your best healthstone alone, through NF Healthstone."),
+        MacroRow("healthPotion", "NF Health Potion", "Your best healing potion alone, through NF Health Potion."),
+        mana,
+        food,
+        { label = "Food Only", toggle = true, under = FOOD,
+          help = "NF Food uses only food, and NF Drink is the one for drink.",
+          get = function() return M.Get("foodOnly") == true end,
+          set = function(v) M.Set("foodOnly", v) end },
+        drink,
+        MacroRow("bandage", "NF Bandage", "Your best bandage on yourself, through NF Bandage."),
+    }) do addingRows[#addingRows + 1] = row end
+end
 
 local page = Settings.Page("Consumable Bar/Settings", S)
 
@@ -158,7 +197,8 @@ page:Card({
 
 page:Card({
     id = "adding", name = "Adding Items", order = 20,
-    help = "What the bar offers to add, and which kinds of consumable.",
+    help = "What the bar offers to add, and the Smart Macros that pick your best item.",
+    watch = M and { M } or nil,
     rows = addingRows,
 })
 

@@ -14,10 +14,10 @@ local ICON_RANGE, TOOLTIP_RANGE = { 12, 32, 1 }, { 80, 160, 5 }
 local SYSTEM_TEXT_RANGE, CLOCK_TEXT_RANGE = { 6, 24, 1 }, { 10, 36, 1 }
 local ALPHA_RANGE = ns.Shared.Style.ALPHA_RANGE
 
-local TEXT_NO_CLOCK, TEXT_24H, TEXT_12H = "No clock", "24-hour clock", "12-hour clock"
-local TEXT_SUMMARY = "%s, %d buttons%s"
-local TEXT_FADES = ", fades until hovered"
-local TEXT_CLASSIC_ICONS = "Classic+ icons are in full color"
+local TEXT_NO_CLOCK, TEXT_24H, TEXT_12H = ns.L("No clock"), ns.L("24-hour clock"), ns.L("12-hour clock")
+local TEXT_SUMMARY = ns.L("%s, %d buttons%s")
+local TEXT_FADES = ns.L(", fades until hovered")
+local TEXT_CLASSIC_ICONS = ns.L("Classic+ icons are in full color")
 
 local STATES = {
     { key = "normal", label = "Normal", tip = "The bar as it sits on your screen." },
@@ -69,6 +69,7 @@ local ROWS = {
     Group("Colors"),
     { key = "iconColor", label = "Icon Color", colour = true, needs = NotClassic, why = TEXT_CLASSIC_ICONS,
       help = "The tint on every button's icon: Naowh's own and any addon's." },
+    { key = "clockColor", label = "Clock Color", colour = true, needs = "showClock" },
     Group("Visibility"),
     { key = "hideInCombat", label = "Hide In Combat", toggle = true, help = "The FPS / MS readout stays up." },
     { key = "mouseover", label = "Show On Mouseover", toggle = true,

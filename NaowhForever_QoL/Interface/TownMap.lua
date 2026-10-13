@@ -26,7 +26,8 @@ local HINT = ns.QoLConstants.HINT_RGB
 local EMPTY = {}
 local MINI_SIZE = 12
 local MINI_INTERVAL = 0.05
-local PIN_RANGE = { 10, 28, 1 }
+local PIN_RANGE = ns.Shared.Style.PIN_SIZE_RANGE
+local TOWN_PIN_SCALE = 0.5625
 local MINI_EVENTS = { "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "PLAYER_ENTERING_WORLD" }
 local MOVE_EVENTS = { "PLAYER_STARTED_MOVING", "PLAYER_STOPPED_MOVING", "MINIMAP_UPDATE_ZOOM" }
 local AUDIT_EVENTS = { "GOSSIP_SHOW", "MERCHANT_SHOW", "TRAINER_SHOW", "TAXIMAP_OPENED",
@@ -35,47 +36,47 @@ local TOWN_SHOW = { "townSpiritHealers", "townZoneLinks", "townTravel", "townCla
     "townInn", "townBank", "townRepair", "townSupplies", "townStable", "townVendors", "townMail" }
 
 local CATEGORIES = {
-    spirit     = { "townSpiritHealers", "Interface\\Icons\\Spell_Holy_GuardianSpirit", "Spirit Healer" },
-    class      = { "townClass", nil, "Class Trainer" },
-    profession = { "townProfession", "Interface\\Icons\\INV_Misc_Book_09", "Trainer" },
-    flight     = { "townFlight", "Interface\\Icons\\Ability_Mount_Gryphon_01", "Flight Master" },
-    inn        = { "townInn", "Interface\\Icons\\INV_Misc_Rune_01", "Innkeeper" },
-    bank       = { "townBank", "Interface\\Icons\\INV_Misc_Bag_10", "Banker" },
-    auction    = { "townBank", "Interface\\Icons\\INV_Misc_Coin_01", "Auctioneer" },
-    stable     = { "townStable", "Interface\\Icons\\Ability_Hunter_BeastTaming", "Stable Master" },
-    repair     = { "townRepair", "Interface\\Icons\\Trade_BlackSmithing", "Repairs" },
-    reagents   = { "townSupplies", "Interface\\Icons\\INV_Misc_Dust_01", "Reagents" },
-    ammo       = { "townSupplies", "Interface\\Icons\\INV_Ammo_Arrow_01", "Ammunition" },
-    food       = { "townSupplies", "Interface\\Icons\\INV_Misc_Food_14", "Food & Drink" },
-    trade      = { "townVendors", "Interface\\Icons\\INV_Fabric_Linen_01", "Trade Goods" },
-    vendor     = { "townVendors", "Interface\\Icons\\INV_Misc_Bag_07", "Vendor" },
-    mail       = { "townMail", "Interface\\Icons\\INV_Letter_15", "Send and collect mail" },
+    spirit     = { "townSpiritHealers", "Interface\\Icons\\Spell_Holy_GuardianSpirit", ns.L("Spirit Healer") },
+    class      = { "townClass", nil, ns.L("Class Trainer") },
+    profession = { "townProfession", "Interface\\Icons\\INV_Misc_Book_09", ns.L("Trainer") },
+    flight     = { "townFlight", "Interface\\Icons\\Ability_Mount_Gryphon_01", ns.L("Flight Master") },
+    inn        = { "townInn", "Interface\\Icons\\INV_Misc_Rune_01", ns.L("Innkeeper") },
+    bank       = { "townBank", "Interface\\Icons\\INV_Misc_Bag_10", ns.L("Banker") },
+    auction    = { "townBank", "Interface\\Icons\\INV_Misc_Coin_01", ns.L("Auctioneer") },
+    stable     = { "townStable", "Interface\\Icons\\Ability_Hunter_BeastTaming", ns.L("Stable Master") },
+    repair     = { "townRepair", "Interface\\Icons\\Trade_BlackSmithing", ns.L("Repairs") },
+    reagents   = { "townSupplies", "Interface\\Icons\\INV_Misc_Dust_01", ns.L("Reagents") },
+    ammo       = { "townSupplies", "Interface\\Icons\\INV_Ammo_Arrow_01", ns.L("Ammunition") },
+    food       = { "townSupplies", "Interface\\Icons\\INV_Misc_Food_14", ns.L("Food & Drink") },
+    trade      = { "townVendors", "Interface\\Icons\\INV_Fabric_Linen_01", ns.L("Trade Goods") },
+    vendor     = { "townVendors", "Interface\\Icons\\INV_Misc_Bag_07", ns.L("Vendor") },
+    mail       = { "townMail", "Interface\\Icons\\INV_Letter_15", ns.L("Send and collect mail") },
 }
 local EVERYWHERE = { flight = true, inn = true, stable = true }
 local STABLE_CLASS = "HUNTER"
 local PIN_ROWS = {
-    { header = "TOWN OPTIONS" },
-    { key = "townCapitalsOnly", text = "Vendors & Trainers Only in Cities",
-      tip = "Keeps vendors, trainers and the bank off questing maps." },
-    { key = "townMinimap", text = "Mailboxes on Minimap", tip = "Pins the mailboxes near you on the minimap." },
-    { key = "townMinimapSpirit", text = "Spirit Healers on Minimap",
-      tip = "Pins the spirit healers near you on the minimap." },
-    { header = "SHOW IN TOWN" },
-    { key = "townFlight", text = "Flight Masters" },
-    { key = "townInn", text = "Innkeepers" },
-    { key = "townMail", text = "Mailboxes", tip = "Every mailbox, in towns and out in the world." },
-    { key = "townSpiritHealers", text = "Spirit Healers",
-      tip = "Every graveyard's spirit healer, in towns and out in the world." },
-    { key = "townZoneLinks", text = "Zone Exits", tip = "Click an exit to open the adjoining zone map." },
-    { key = "townTravel", text = "Boats & Zeppelins",
-      tip = "Every dock and zeppelin tower; click one to open where it goes." },
-    { key = "townClass", text = "Class Trainers", tip = "Your class's trainers only." },
-    { key = "townProfession", text = "Profession Trainers" },
-    { key = "townBank", text = "Bank & Auction House" },
-    { key = "townRepair", text = "Repairs" },
-    { key = "townSupplies", text = "Reagents, Ammo & Food" },
-    { key = "townStable", text = "Stable Masters", tip = "Hunters only." },
-    { key = "townVendors", text = "Other Vendors", tip = "Trade goods and every other merchant." },
+    { header = ns.L("TOWN OPTIONS") },
+    { key = "townCapitalsOnly", text = ns.L("Vendors & Trainers Only in Cities"),
+      tip = ns.L("Keeps vendors, trainers and the bank off questing maps.") },
+    { key = "townMinimap", text = ns.L("Mailboxes on Minimap"), tip = ns.L("Pins the mailboxes near you on the minimap.") },
+    { key = "townMinimapSpirit", text = ns.L("Spirit Healers on Minimap"),
+      tip = ns.L("Pins the spirit healers near you on the minimap.") },
+    { header = ns.L("SHOW IN TOWN") },
+    { key = "townFlight", text = ns.L("Flight Masters") },
+    { key = "townInn", text = ns.L("Innkeepers") },
+    { key = "townMail", text = ns.L("Mailboxes"), tip = ns.L("Every mailbox, in towns and out in the world.") },
+    { key = "townSpiritHealers", text = ns.L("Spirit Healers"),
+      tip = ns.L("Every graveyard's spirit healer, in towns and out in the world.") },
+    { key = "townZoneLinks", text = ns.L("Zone Exits"), tip = ns.L("Click an exit to open the adjoining zone map.") },
+    { key = "townTravel", text = ns.L("Boats & Zeppelins"),
+      tip = ns.L("Every dock and zeppelin tower; click one to open where it goes.") },
+    { key = "townClass", text = ns.L("Class Trainers"), tip = ns.L("Your class's trainers only.") },
+    { key = "townProfession", text = ns.L("Profession Trainers") },
+    { key = "townBank", text = ns.L("Bank & Auction House") },
+    { key = "townRepair", text = ns.L("Repairs") },
+    { key = "townSupplies", text = ns.L("Reagents, Ammo & Food") },
+    { key = "townStable", text = ns.L("Stable Masters"), tip = ns.L("Hunters only."), class = STABLE_CLASS },
+    { key = "townVendors", text = ns.L("Other Vendors"), tip = ns.L("Trade goods and every other merchant.") },
 }
 
 local MAP_ART = {
@@ -101,19 +102,24 @@ local TRAVEL_ART = {
     Zeppelin = { "TaxiNode_Continent_Neutral", "Interface\\Icons\\INV_ZeppelinMount", "Vehicle-Air-Horde" },
 }
 
-local TEXT_LEFT = "Left-click: "
-local TEXT_RIGHT = "Right-click: "
-local TEXT_OPEN_ZONE = "Click to open this zone"
-local TEXT_AUDIT_NEAR = "%s: you %.1f, %.1f / data %.1f, %.1f, %.1f apart"
-local TEXT_AUDIT_MISSING = "%s: you %.1f, %.1f on map %d, not in the data"
-local TEXT_AUDIT = "Town audit %s. %d NPCs recorded so far."
-local TEXT_AUDIT_ON = "on: open an NPC's window while standing next to them"
-local TEXT_AUDIT_OFF = "off"
+local TEXT_LEFT = ns.L("Left-click: ")
+local TEXT_RIGHT = ns.L("Right-click: ")
+local TEXT_OPEN_ZONE = ns.L("Click to open this zone")
+local TEXT_AUDIT_NEAR = ns.L("%s: you %.1f, %.1f / data %.1f, %.1f, %.1f apart")
+local TEXT_AUDIT_MISSING = ns.L("%s: you %.1f, %.1f on map %d, not in the data")
+local TEXT_AUDIT = ns.L("Town audit %s. %d NPCs recorded so far.")
+local TEXT_AUDIT_ON = ns.L("on: open an NPC's window while standing next to them")
+local TEXT_AUDIT_OFF = ns.L("off")
 local TEXT_TOWN, TEXT_TOWN_PINS = "Town", "Town Pins"
-local TEXT_TOWN_TIP = "Service NPCs, mailboxes, spirit healers, exits and docks; the rows below pick which."
-local TEXT_TOWN_OFF = "Town pins off"
-local TEXT_SUMMARY = "Town pins: %d of %d shown%s"
-local TEXT_CAPITALS = ", vendors and trainers in cities only"
+local TEXT_TOWN_TIP = ns.L("Service NPCs, mailboxes, spirit healers, exits and docks; the rows below pick which.")
+local TEXT_TOWN_OFF = ns.L("Town pins off")
+local TEXT_SUMMARY = ns.L("Town pins: %d of %d shown%s")
+local TEXT_CAPITALS = ns.L(", vendors and trainers in cities only")
+local TEXT_ON_MAP = ns.L(" Which town pins show is switched on the map, from the button at its top right.")
+local MAP_CARD_ORDER, PIN_CARD_ORDER = 10, 20
+local TEXT_MAP_CARD, TEXT_PIN_CARD = ns.L("Map Options"), ns.L("Map Pins")
+local TEXT_MAP_HELP = ns.L("How the world map looks.")
+local TEXT_PIN_HELP = ns.L("Every pin on the world map: town pins for your faction and each module's own.")
 local TEXT_PINS_SEARCH = "vendor vendors trainer trainers mailbox graveyard npc npcs"
 
 local miniPins, miniSpots = {}, {}
@@ -200,8 +206,12 @@ local function TravelArt(label)
     return TRAVEL_ATLAS
 end
 
+local function ScaleTownPin(pin)
+    ScalePin(pin, TOWN_PIN_SCALE)
+end
+
 NaowhForeverTownPinMixin = CreateFromMixins(MapCanvasPinMixin)
-NaowhForeverTownPinMixin.ApplyCurrentScale = ScalePin
+NaowhForeverTownPinMixin.ApplyCurrentScale = ScaleTownPin
 
 function NaowhForeverTownPinMixin:OnLoad()
     self:UseFrameLevelType("PIN_FRAME_LEVEL_AREA_POI")
@@ -232,7 +242,7 @@ function NaowhForeverTownPinMixin:OnMouseLeave()
 end
 
 NaowhForeverZoneLinkPinMixin = CreateFromMixins(MapCanvasPinMixin)
-NaowhForeverZoneLinkPinMixin.ApplyCurrentScale = ScalePin
+NaowhForeverZoneLinkPinMixin.ApplyCurrentScale = ScaleTownPin
 
 function NaowhForeverZoneLinkPinMixin:OnLoad()
     self:UseFrameLevelType("PIN_FRAME_LEVEL_AREA_POI")
@@ -310,9 +320,9 @@ end
 local function AddDocks(map, mapID, faction)
     for _, dock in ipairs(ns.TownTravel[mapID] or EMPTY) do
         if dock[3]:find(faction, 1, true) then
-            map:AcquirePin(LINK_TEMPLATE, { name = dock[4], atlasName = TravelArt(dock[4]),
+            map:AcquirePin(LINK_TEMPLATE, { name = ns.L(dock[4]), atlasName = TravelArt(dock[4]),
                 position = CreateVector2D(dock[1] / PERCENT, dock[2] / PERCENT), linkedUiMapID = dock[5],
-                rightName = dock[6], rightUiMapID = dock[7] })
+                rightName = dock[6] and ns.L(dock[6]), rightUiMapID = dock[7] })
         end
     end
 end
@@ -521,27 +531,39 @@ function ns.TownAudit()
     ns.Print(TEXT_AUDIT:format(auditing and TEXT_AUDIT_ON or TEXT_AUDIT_OFF, count))
 end
 
-local function CardRows()
+local function AddSectionRows(rows, section, titled)
+    if titled and section.title then rows[#rows + 1] = ns.Shared.Settings.Group(section.title) end
+    for _, row in ipairs(section.rows) do
+        row.lent = row.store ~= S
+        rows[#rows + 1] = row
+    end
+end
+
+local function PinCardRows()
     local rows = {
         ns.Shared.Settings.Group(TEXT_TOWN),
-        { key = "townMap", label = TEXT_TOWN_PINS, toggle = true, help = TEXT_TOWN_TIP },
-        { key = "townPinSize", label = "Town Pin Size", slider = PIN_RANGE, needs = "townMap" },
+        { key = "townPinSize", label = "Town Pin Size", slider = PIN_RANGE, needs = "townMap", why = TEXT_TOWN_OFF },
     }
-    for _, row in ipairs(PIN_ROWS) do
-        if row.header then
-            rows[#rows + 1] = ns.Shared.Settings.Group(row.header:sub(1, 1) .. row.header:sub(2):lower())
-        else
-            rows[#rows + 1] = { key = row.key, label = row.text, toggle = true, help = row.tip, needs = "townMap" }
-        end
-    end
     for _, section in ipairs(ns.Shared.MapPinSections()) do
-        if section.title then rows[#rows + 1] = ns.Shared.Settings.Group(section.title) end
-        for _, row in ipairs(section.rows) do
-            row.lent = row.store ~= S
-            rows[#rows + 1] = row
-        end
+        if not section.map and not (section.hidden and section.hidden()) then AddSectionRows(rows, section, true) end
     end
     return rows
+end
+
+local function MapCardRows()
+    local rows = {}
+    for _, section in ipairs(ns.Shared.MapPinSections()) do
+        if section.map then AddSectionRows(rows, section, false) end
+    end
+    return rows
+end
+
+local function PinSearch()
+    local words = { TEXT_PINS_SEARCH }
+    for _, row in ipairs(PIN_ROWS) do
+        if row.text then words[#words + 1] = row.text:lower() end
+    end
+    return table.concat(words, " ")
 end
 
 local function TownSummary(store)
@@ -566,13 +588,21 @@ boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", Apply)
 
 ns.TownPinRows = PIN_ROWS
+ns.TownPinRange = PIN_RANGE
 ns.TownPinTexts = { group = TEXT_TOWN, switch = TEXT_TOWN_PINS, tip = TEXT_TOWN_TIP }
 
-ns.Shared.Settings.Page("QoL/Interface", S):Card({
-    id = "townMap", name = "Map Options and Pins", order = 40,
-    help = "The world map's options and every pin on it: town pins (service NPCs for your faction), "
-        .. "quests, rares and entrances. Also set from the button on the map.",
-    search = TEXT_PINS_SEARCH,
+local page = ns.Shared.Settings.Page("QoL/Map & Pins", S)
+
+page:Card({
+    id = "mapOptions", name = TEXT_MAP_CARD, order = MAP_CARD_ORDER,
+    help = TEXT_MAP_HELP,
+    rows = MapCardRows,
+})
+
+page:Card({
+    id = "townMap", name = TEXT_PIN_CARD, order = PIN_CARD_ORDER,
+    help = TEXT_PIN_HELP .. TEXT_ON_MAP,
+    search = PinSearch(),
     summary = TownSummary,
-    rows = CardRows,
+    rows = PinCardRows,
 })

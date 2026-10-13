@@ -18,15 +18,16 @@ NaowhForever_QoL/
     SpellEfficiency.lua Mana Efficiency on spell tooltips, its Preview Tooltip and the Tooltips card's preview
     GlobalCopy.lua      /copy, and tooltip IDs with their copy shortcut (the card is Shared/UI/CopyCard.lua)
     HideClutter.lua     UI Clutter
+    UnitNames.lua       Names Over Heads: guild names, guild titles and player titles with player names
     ChatZones.lua       Chat Zones
     TownMailboxes.lua   mailboxes by map (ns.TownMailboxes), generated
     TownSpiritHealers.lua  spirit healers by map (ns.TownSpiritHealers), generated
     TownTravel.lua      boats and zeppelins by map (ns.TownTravel), generated
     ZoneExits.lua       each zone's exits (ns.ZoneExits), generated
     TownMap.xml         TownMap.lua, the town pin templates, then MapPinsPanel.lua
-    TownMap.lua         the town pins on the world map and minimap, and the Map Options and Pins card, /naowh townaudit (ns.TownAudit)
-    MapPinsPanel.lua    the Map Options and Pins button on the world map and its drawer of which pins and options show
-    MapSize.lua         Map Window: the windowed world map scaled by a corner grip or a slider, moved by its title bar
+    TownMap.lua         the town pins on the world map and minimap, and the Map Options and Map Pins cards on the Map & Pins tab, /naowh townaudit (ns.TownAudit)
+    MapPinsPanel.lua    the Town Pins button on the world map and its drawer of which town pins show
+    MapSize.lua         Map Window: the windowed world map scaled by a corner grip, moved by its title bar
     MapOverlays.lua     each zone map's explorable areas (ns.MapOverlays), generated
     Unexplored.xml      the unexplored pin template, then Unexplored.lua
     Unexplored.lua      Unexplored Areas on the world map
@@ -48,11 +49,16 @@ NaowhForever_QoL/
     CursorCooldown.lua  Cooldown at Cursor
     GcdTracker.lua      GCD Tracker (ns.GCDSpell)
     FocusCastBar.lua    the Focus Cast Bar
+    DamageMeterLayout.lua the game's damage meter Bar Height, saved in the active Edit Mode layout
+    DamageMeterSkin.lua the card Default Damage Meter: the game's meter in the theme, and its place
     StealthReminder.lua the Stealth Reminder
     PetTracker.lua      the Pet Tracker
   Questing/
     BuffThanks.lua      Buff Thank You Message and its line editor
-    GroupButtons.lua    On-Screen Buttons (Invite, Disband)
+    Invites.lua         the people you keep an invite button for and their editor (ns.InvitePerson,
+                        ns.InviteAll, ns.ShowInviteEditor)
+    GroupButtons.lua    On-Screen Buttons (Invite, your invite buttons, Invite All, Disband)
+    FreeForAll.lua      Always Free for All, the party loot method while you lead
     TalentPoints.lua    the unspent talent points reminder
     QuestAutomation.lua accept, hand in and share quests, saved reward picks
     PlayerHistory.lua   Player History (ns.PlayerHistory), read by the Naowh Inspect panel
@@ -99,6 +105,45 @@ NaowhForever_QoL/
 
 ## Why
 
+- The Damage Meter Skin never hides or re-lays out the game's meter: it recolors its textures and
+  fonts after the game sets them (hooksecurefunc on each entry, a scroll box callback for new
+  ones), and remembers the art, the font with its flags and shadow, and the bar's atlas to give
+  them back when the switch goes off. It reads no damage numbers, which are secret in combat.
+  Bar Texture swaps the file on the bar's own texture, which the game only ever colors. Font and
+  Outline are written once per change of a setting, since the game never sets them again; the
+  colors are the theme's tokens until one is picked, as in the Damage Meter module.
+  The title bar fade, the scroll bar and the opacities are `SetAlpha` and `SetVertexColor` calls on the
+  game's own parts, never a Hide. A tick of ours (a frame made only while one of them is on) moves the
+  title parts toward the mouse state and puts the scroll bar's alpha back, since the game's own
+  emphasis animation sets it again. The tick sleeps: an `OnEnter` hook on the window and its
+  children (the entries as they are acquired) wakes it, and it stops one second after the mouse has
+  left and the fade is done, so an idle meter runs nothing. The window border is a frame of ours
+  round the window. The title bar's buttons are greyed with `SetDesaturated` and tinted with
+  `SetVertexColor`, their first look remembered to give back; sizes are one setting each for the
+  names, the amounts and the title, 0 keeping the game's own, which Edit Mode's Text Size still
+  scales.
+- The card is in sections (Window, Bars, Text, Title Bar, Spell Panel, Reset) that mix the reskin's rows, which wait
+  for the Reskin switch, with the game's own settings, which do not.
+- The game's own settings in it (`DamageMeterLayout.lua`) are the game's list for its damage
+  meter, written through `C_EditMode`: it copies the manager's layout info (never writes into it),
+  changes the values in the copy and saves that, so the game applies it with its own code and
+  nothing of its is tainted. Each value is stored as Edit Mode stores it: the setting less the
+  slider's minimum (Bar Height, Window Width and Height), less the minimum over the step (Bar
+  Spacing, Text Size, Window and Background Opacity), or the enum itself (Bar Style, Numbers,
+  Visibility).
+  Before the first change since login it keeps every value and a backup string of the layout,
+  which Restore Game Settings puts back. It refuses in combat, with Edit Mode open and on the game's
+  built-in layouts, says why in a note under the row, shows the value on its way until the save
+  is done, and waits half a second after a slider stops, since every save re-lays out the game's
+  systems. Window Width and Height wait for Move and Resize to be off, since that anchors the
+  window on its own.
+- Move and Resize re-anchors the primary session window to the screen and sizes it, since the game
+  leaves that window to Edit Mode (`CanMoveOrResizeSessionWindow` is false for it). Only the session
+  window moves: the Edit Mode frame it hangs from is never touched, and the game's own window setup is
+  followed by ours (hooksecurefunc on `SetupSessionWindow`). The drag and the grip are `HookScript`s
+  beside the game's own, which return early for this window, and the game's per-window lock is
+  respected. Switching it off anchors the window to its parent again exactly as the game did. Windows
+  2 and 3 are the game's own to move.
 - QoL is optional: the base and every other module read what they need from it behind a nil
   guard, never at load, and the data they share with it lives in the core (`Core/Settings.lua`,
   the Alerts group in `Core/AlertStack.lua`, Naowh's setups in `Core/Profiles/Setups.lua`) or in
@@ -154,6 +199,9 @@ NaowhForever_QoL/
   and toasts are closed 0.05s after they display.
 - `showTutorials` is the Show Tutorials box in Blizzard's options. What you had before Turn Off
   Tutorials is kept in the account store and put back when it goes off, even in a later session.
+- Names Over Heads writes the game's own `UnitNamePlayerGuild`, `UnitNameGuildTitle` and
+  `UnitNamePlayerPVPTitle` and keeps nothing: the game saves them. Forever's options have no box for
+  them (only your own, NPC and player names), and a row shows only where the client has its setting.
 - In-game cinematics carry no ID, so one is known by the zone and subzone it plays in. Skipping
   one waits a frame so CinematicFrame has taken the start before it is cancelled.
 - Finishing a movie shows UIParent again, which combat lockdown would block, so a movie is never
@@ -238,6 +286,11 @@ NaowhForever_QoL/
   bags you are looking at.
 - Auction Prices keeps one price table per auction house (realm and faction), as prices differ;
   the key is worked out once because it is read on every item tooltip.
+- The Scan Prices button sits after the last auction house tab added through LibAHTab
+  (Auctionator's Shopping, Selling, Cancelling and Auctionator), read from the library's
+  `internalState.Tabs`, which is not public API; without it the button sits next to Auctions.
+  Those tabs can be made on the same AUCTION_HOUSE_SHOW, after us, so the button is placed again
+  a frame later.
 - Blizzard allows one full auction house scan every 15 minutes (`SCAN_COOLDOWN` 900s). The
   listings arrive all at once and are read 1000 a frame (`CHUNK`), so a large auction house does
   not stall; bid-only listings are skipped. The profession window's crafting profit reads these
@@ -528,7 +581,10 @@ NaowhForever_QoL/
 - Scrap sells `BATCH` (6) items at a time, `STEP_DELAY` (0.25 s) apart, and each sale checks again that you are still at the vendor, out of combat, with the same item in that slot. That is why the taint scan allows its one `C_Container.UseContainerItem`; keep that check right before the call.
 - A generation number drops a step left over from an earlier sale, so closing the vendor or entering combat ends a sale cleanly.
 - The X on a rule match keeps it (`scrapKeep`), so the rule leaves it alone until you mark it yourself.
-- Bag buttons, the game's and EllesmereUI's, are hooked once with HookScript, and only out of combat.
+- Bag buttons, the game's, EllesmereUI's and Baganator's, are hooked once with HookScript, and only out of combat.
+- Baganator gets the mark as a corner widget and the marks as a junk plugin, through `Baganator.API`. Neither can be taken back, so both are registered once, the first time the Scrap Marker is on, and answer nothing while it is off.
+- Baganator pools its item buttons and moves them between slots, so an Alt-click reads the button's bag and slot when it lands, not at the last paint. Its buttons for other characters' bags have no bag, so they get no click and no mark.
+- Baganator's junk plugin takes over its junk detection, so ours counts grey items with a sell price as junk too, as Baganator's own Poor quality does, and adds scrap on top.
 - `MAX_ITEM_ID` caps an imported ID at the largest 32-bit signed number, so a pasted list cannot ask for an impossible item.
 
 ### Skyborne Spots
@@ -559,9 +615,9 @@ NaowhForever_QoL/
 - Forever has no map links of its own (`GetMapLinksForMap` returns nothing), so the exits come from `ZoneExits.lua`. `EXIT_SHRINK` (0.6) makes an exit arrow 40% smaller than a pin, so it stands no bigger than the others, and `EXIT_LENGTH` is its length in its own widths.
 - Vendors & Trainers Only in Cities (`townCapitalsOnly`) keeps vendors, trainers and the bank off questing maps. Flight masters, innkeepers and stable masters (`EVERYWHERE`) are what a traveller looks for in any town, so they show on every map with it on, except stable masters, which only a hunter (`STABLE_CLASS`) sees; so do mailboxes and spirit healers, which are what you look for out in the world.
 - `townMinimap` is the minimap's mailboxes and `townMinimapSpirit` its spirit healers: `townMinimap` once held both, so existing profiles keep their mailboxes.
-- Which pins and options show is chosen on the map itself, from the Map Options and Pins button (`MapPinsPanel.lua`), and the options card (QoL > Interface, id `townMap`) has the same rows. The keys stay in the QoL store, so saved settings carry over. The button shows whenever QoL is on, since the drawer is also where a switch that is off is turned back on.
-- Map Options and Pins is the home of every map pin and map option: the town pins (the card's Town Pins row, which the town rows wait for), QoL's own Map Window, Unexplored Areas, Zone Levels and Skyborne Spots, the Quest List's quests and rares (Discovery) and the Dungeon Journal's entrances. Each of the last adds a section to `ns.Shared.MapPins` (`{ title, order, store, switch, rows }`), and `ns.Shared.MapPinSections()` hands them back by `order` (10 to 12 the map options, then the sections with no `order`, which count as 50, in load order, and Skyborne last at 60). A section's `title` is its group; one with no title continues the group above. The card reads them below the town rows, and the drawer (switches only) after its town rows. Rows of another module's store are `lent`, so the card's Reset and changed count leave them to their module. Each section names its store and switch, which the drawer watches (`OnChange`), so an open drawer follows changes made elsewhere. Drawer rows dim and lock while their `needs` (a function, or the key of a switch in the row's store) fails, as on the card: the town rows while Town Pins is off. A module that is not loaded adds nothing. The drawer has its own Town Pins switch, so the town pins can be turned back on from the map.
-- The Map Options and Pins button sits in the map's top right corner, left of the buttons the map keeps there and at their size, so they read as one row. Those are found by where they sit, not by name, so a map with more, fewer or none of them still gets a free spot.
+- Which town pins show is chosen on the map itself, from the Town Pins button (`MapPinsPanel.lua`), and only there: the long list of town pin types is what you pick while looking at the map. Everything else is on QoL's Map & Pins tab and only there: a Map Options card (id `mapOptions`) and a Map Pins card (id `townMap`: Town Pin Size, then each module's pins under its title). No setting is in both places but Town Pin Size. The Map Pins card's search words include every town pin's name, so the options search still leads there. The keys stay in the QoL store, so saved settings carry over. The button shows whenever QoL is on, since the drawer is also where a switch that is off is turned back on.
+- Map & Pins is the home of every map pin and map option: the town pins, QoL's own Unexplored Areas, Zone Levels and Skyborne Spots, Discovery's quests, rares, library books and Sleeping Bag steps, and the Dungeon Journal's entrances. Each of the last adds a section to `ns.Shared.MapPins` (`{ title, order, store, switch, rows, map }`), and `ns.Shared.MapPinSections()` hands them back by `order` (10 to 12 the map options, then the sections with no `order`, which count as 50, in load order, and Skyborne last at 60). A section's `title` is its group; one with no title continues the group above. Sections marked `map` (Unexplored Areas, Zone Levels) are the Map Options card's rows, the rest follow Town Pin Size on Map Pins under their titles. Rows of another module's store are `lent`, so a card's Reset and changed count leave them to their module. A module that is not loaded adds nothing, and a section whose `hidden` says so is left off (Skyborne Spots for anyone not Skyborne). Drawer rows dim and lock while their `needs` fails: the town rows while Town Pins is off. A town row with a `class` shows only for that class (Stable Masters, hunters). The drawer has its own Town Pins switch, so the town pins can be turned back on from the map.
+- The Town Pins button sits in the map's top right corner, left of the buttons the map keeps there and at their size, so they read as one row. Those are found by where they sit, not by name, so a map with more, fewer or none of them still gets a free spot.
 - The drawer is the options window's look: a header strip in the panel color, small accent group titles and ruled rows with the switch on the right. It is the map's child, so it opens, closes and scales with the map, `PANEL_LEVEL` over the map's pins as the Dungeon Journal's drawer.
 - The drawer sits against the map window's left side (the Dungeon Journal takes the right), `GAP` -1 putting its border on the map's so the two read as one window; with no room there, the right. It is the map's height, as wide as the quest log beside the map (`PANEL_W` where there is none), and its rows shrink to fit a small map, down to `ROW_MIN_H`; past that they scroll, so the drawer never runs off the map. The scroll bar sits inside the rows' right margin, raised over them so its grip takes the mouse.
 - The maximized map letterboxes its picture on a wide screen, so there the drawer goes in the black bar left of the picture, as wide as the bar allows; with no bar `BAR_MIN_W` wide it hangs under the Map Pins button, which stays free to close it. Either way it is no taller than the picture and its rows scroll. The map's Maximize and Minimize place it again.
@@ -571,16 +627,18 @@ NaowhForever_QoL/
 - Spirit healers are the sheet's blue spirit ghost. Where the client lacks it, the Spirit Healer's angel cut round (`ROUND_ART`, `ROUND_MASK`), as the Skyborne pins are, reads better than a tombstone. Pins are pooled across kinds, so the mask goes on and comes off again.
 - `TRAVEL_ART` picks a dock's art by the first word of its label. Boats are the flight map's ferry (`FlightMasterFerry`). Forever has no zeppelin map art (no atlas names one), so zeppelin towers are the flight map's globe for travel to another continent, which is what a zeppelin does. An item icon there (`ICON_FOLDER`) is cut round. The cyan ball is left for a client with none of them.
 - Checked in game: Forever lacks `Vehicle-AllianceShip` and `Vehicle-HordeShip`, `ShipMissionIcon-*-Map` are badges, not ships, and `Vehicle-Air-Horde` reads as a warship. Wowpedia's small icon numbers ("obj220") are cells of the object icon sheet, not `GetPOITextureCoords` indices; townlong-yak's AtlasInfo.lua names them.
-- Pins scale with `ns.Shared.ScalePin`: 1.5 times their size on screen whatever the canvas scale, so they keep one size as the map zooms, in the window and full screen.
+- Pins scale with `ns.Shared.ScalePin`: 1.5 times their size on screen whatever the canvas scale, so they keep one size as the map zooms, in the window and full screen. Town pins take `TOWN_PIN_SCALE` (0.5625) of that, so Town Pin Size 20, the default every map pin shares (`PIN_SIZE_DEFAULT`, in `PIN_SIZE_RANGE`), is the size that reads best beside the other pins: one number sizes every kind of pin alike.
+- The drawer ends on Town Pin Size, a copy of the card's slider in smaller text (`FOOT_SIZE`), so the pins can be sized while looking at them.
 - `MapOverlays.lua`, `TownMailboxes.lua`, `TownSpiritHealers.lua`, `TownTravel.lua` and `ZoneExits.lua` are generated (`Tools/build/map_overlays.py`, `mailboxes.py`, `spirit_healers.py`, `travel.py`, `zone_exits.py`): change the builder and run it, never the file.
 
 ### Map Window
-- Only the map frame's scale changes, so its pins, the Map Options and Pins drawer and the quest log scale with it. An anchor's offsets are in the frame's own scale, so they are corrected to keep its top left corner where it was on screen.
+- Always on while QoL is: no switch and no Map Scale slider, the grip is the setting. A map you can size and move is how the addon's map works, not an option; `mapSizePercent` and `mapSizePos` keep what the grip and title bar set.
+- Only the map frame's scale changes, so its pins, the Town Pins drawer and the quest log scale with it. An anchor's offsets are in the frame's own scale, so they are corrected to keep its top left corner where it was on screen.
 - The grip is the options window's own (`UI-ChatIM-SizeGrabber`). Dragged away from the map's top left corner the map grows, towards it it shrinks, by how far the cursor is from that corner in screen pixels, so the distance does not change as the map's own scale does. It snaps to `STEP_PCT` between `MIN_PCT` and `MAX_PCT`; right click puts it back to 100%. A drag the map's hiding cuts short keeps the size it got to.
 - The full screen map is drawn at the game's size: its Maximize sets the scale back to 1 and hides the grip, Minimize puts ours back.
 - The title bar moves the map: an invisible handle over it, short of `TITLE_BUTTONS` on the right so the map's own buttons still work. It places the map by hand while the cursor moves, never with StartMoving, so the game does not save it as a user-placed frame. The spot (`mapSizePos`, the top left corner in UIParent units) is kept at least `KEEP_ON_SCREEN` on screen.
-- The game puts its panels back in place when one opens or closes (`UpdateUIPanelPositions`), so after it does, a saved spot is put back. That hook also notes where the game put the windowed map (`home`), even with a saved spot and after a /reload, so right-click on the title bar, or turning Map Window off, puts it back there. Opening the map places it before showing it, so the hook takes the map's spot while it is shown or is the panel being placed, never a hidden map's stale one. Addon code never calls `UpdateUIPanelPositions` itself: that would taint the secure `FramePositionDelegate`.
-- Off, the hooks return straight away and the map is left where the game, or another map mover, puts it. Switching Map Window off puts the scale and the game's spot back once (`applied`). Switched on with the map open, the spot it is in is noted as `home` first.
+- The game puts its panels back in place when one opens or closes (`UpdateUIPanelPositions`), so after it does, a saved spot is put back. That hook also notes where the game put the windowed map (`home`), even with a saved spot and after a /reload, so right-click on the title bar, or turning QoL off, puts it back there. Opening the map places it before showing it, so the hook takes the map's spot while it is shown or is the panel being placed, never a hidden map's stale one. Addon code never calls `UpdateUIPanelPositions` itself: that would taint the secure `FramePositionDelegate`.
+- With QoL off, the hooks return straight away and the map is left where the game, or another map mover, puts it. Turning QoL off puts the scale and the game's spot back once (`applied`). Turned on with the map open, the spot it is in is noted as `home` first.
 - Works in combat: Forever's world map has no secure frames (nothing in Blizzard_WorldMap or Blizzard_MapCanvas inherits a secure template, and the game itself resizes it in combat), so a full screen map opened in a fight is drawn at the game's size straight away.
 
 ### Restock
@@ -650,6 +708,7 @@ NaowhForever_QoL/
 - The container swaps bars without hiding when XP comes back on at max level (the ApplyPendingBarToShow hook), and its own fade-in animation runs after those hooks and ends at full alpha, which is how the bar came back after a /reload. Animations do not go through SetAlpha, so an OnUpdate hook catches it, only while it is shown and only once its alpha has crept back up.
 - The texts are measured and placed only when one of them, or the bar, changed. `TEXT_GAP` sits between two texts in a row and `SLOT_FONT_MIN` is the smallest they shrink to before they cut off; a text is measured with a pixel spare so rounding never cuts it. Side texts start at the bar's ends; the middle one is centred while it has room and slides away from a long side text when not; when a row does not fit even at its smallest, it is split evenly and long texts cut off. The rows above and below shrink only as far as their own texts need; the texts beside the bar keep the full size. The texts inside follow the bar's height (`INSIDE_SHARE`).
 - Rested runs from the end of your XP, like Blizzard's, the full height of the bar and over the incomplete quests, so a bar full of quest XP cannot push it off the end; at least `RESTED_MIN_W` (3 px), so a sliver of rest still reads.
+- In a battleground or an arena (`PVP_INSTANCES`, from IsInInstance) the bar hides, like Blizzard's stays faded: the instance type only changes behind a loading screen, so it is read on PLAYER_ENTERING_WORLD and when the bar turns on, never per update. The HUD Editor still shows it there, to place it.
 - The bar takes the mouse only while Ctrl is down, for its reset click; otherwise a click or a camera drag that starts over it goes through to the world.
 - The texts are picked on the preview, so their rows are not drawn on the page; they are still declared for the search, the changed count and the card's Reset. A preview spot answers HandlesGlobalMouseEvent so the menu manager does not close its menu before OnMouseDown toggles it.
 
@@ -694,6 +753,23 @@ NaowhForever_QoL/
 - The pace arrow sits a share of the text size lower (`DROP_SHARE`), level with the letters: the Naowh font leaves room above capitals.
 - The file sits close to Lua 5.1's 200-local cap for one chunk, so new constants are grouped into tables (`FORMAT`, `DEFAULT_POS`); the XP Bar folds its texts into `TEXT` for the same reason.
 
+
+### Always Free for All
+- Raids are left alone: a raid usually sets its own loot rules.
+- The method is set again whenever it changes, so a leader who wants another one turns the switch off.
+- `C_PartyInfo.SetLootMethod` is marked HasRestrictions in the Forever API docs; it is called only out
+  of combat, from an event handler, never from a secure path.
+
+### Invite Buttons
+- The list is in `ns.PROFILE_OWN`: a shared profile never carries your friends' BattleTags.
+- A Battle.net friend is kept by BattleTag: the game account ID to invite changes every session, so it
+  is looked up on each click, the first of their game accounts online on Forever.
+- Battle.net friends are invited with `C_BattleNet.InviteFriend`, as the game's Friends list does: the
+  legacy friend list is off on Forever, so a name invite only reaches characters the game can find.
+- Invite All stops at a full party (`MAX_PARTY_MEMBERS`) and does not turn the party into a raid;
+  people already in the group are skipped.
+- The invite buttons are plain buttons: invites are not protected, so they work in combat. Adding or
+  removing one moves the bar, which waits for the fight to end, as the bar's other changes do.
 
 ### QoL defaults (Core/Settings.lua)
 - Every on/off switch default in the QoL store is read from `ns.FEATURES.qol`; the values are unchanged.

@@ -9,7 +9,7 @@ dofile("Libs/LibSerialize/LibSerialize.lua")
 local PlainText = dofile("Tools/regression/plain_text.lua")()
 local settingsShared = { Style = dofile("Tools/regression/shared_style.lua"), Settings = {} }
 local settingsStyle = assert(loadfile("Shared/Settings/Style.lua"))
-setfenv(settingsStyle, { _G = { NaowhForever = { Shared = settingsShared } }, setmetatable = setmetatable })
+setfenv(settingsStyle, { _G = { NaowhForever = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower, Shared = settingsShared } }, setmetatable = setmetatable })
 settingsStyle()
 
 local count = 0
@@ -47,7 +47,7 @@ local function World()
     }
     w.active = "Default"
     w.buildsChanged = 0
-    local ns = {
+    local ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower,
         UI = { PROFILES_PAGE = "Profiles" }, CODE_BUILD = "test", PlainText = PlainText,
         Macros = { C = { LIMIT = 255 } },
         TrainingBuilds = { [2] = { talents = {} } },
@@ -180,6 +180,41 @@ Case("the parts a string holds, for the import's ticks", function()
     for _, part in ipairs(list) do keys[#keys + 1] = part.key .. (part.detail and (":" .. part.detail) or "") end
     assert(table.concat(keys, ",") == "settings:2 modules,macros:1 class macros,library:2 macros,consumables,"
         .. "builds:1 builds,bisLists:1 lists,look", table.concat(keys, ","))
+end)
+
+Case("a module's on/off travels with Settings, through the AddOn list rather than SavedVariables",
+    function()
+    local w = World()
+    local store = { Set = function() end }
+    local calls = {}
+    _G.C_AddOns = {
+        EnableAddOn = function(addon) calls[#calls + 1] = "enable:" .. addon end,
+        DisableAddOn = function(addon) calls[#calls + 1] = "disable:" .. addon end,
+    }
+    w.ns.LinkedAddons = function(addon) return { addon } end
+    w.ns.ModuleAddons = function()
+        return {
+            { addon = "NaowhForever_Discovery", store = store, key = "enabled", on = true },
+            { addon = "NaowhForever_GearSets", store = store, key = "gearSets", on = false },
+        }
+    end
+    local text = assert(w.ns.ExportProfile())
+    local parts = assert(w.ns.DecodeProfile(text)).parts
+    assert(parts.settings.__modules.NaowhForever_Discovery == true)
+    assert(parts.settings.__modules.NaowhForever_GearSets == false)
+
+    -- the importing character starts with the opposite state
+    w.ns.ModuleAddons = function()
+        return {
+            { addon = "NaowhForever_Discovery", store = store, key = "enabled", on = false },
+            { addon = "NaowhForever_GearSets", store = store, key = "gearSets", on = true },
+        }
+    end
+    w.ns.ImportProfile(assert(w.ns.DecodeProfile(text)), { settings = true }, "Modules")
+    assert(calls[1] == "enable:NaowhForever_Discovery", calls[1])
+    assert(calls[2] == "disable:NaowhForever_GearSets", calls[2])
+    assert(#calls == 2, "a module already in the wanted state is left alone")
+    _G.C_AddOns = nil
 end)
 
 Case("import: a new profile with every part, switched to, the old one untouched", function()

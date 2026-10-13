@@ -12,7 +12,9 @@
     <Script file="Combat\CombatAlert.lua"/>
     <Script file="Questing\QuestAutomation.lua"/>
     <Script file="Questing\Disband.lua"/>
+    <Script file="Questing\Invites.lua"/>
     <Script file="Questing\GroupButtons.lua"/>
+    <Script file="Questing\FreeForAll.lua"/>
     <Script file="Loot\LootConfirm.lua"/>
     <Script file="Cursor\CursorClip.lua"/>
     <Script file="Combat\CombatTimer.lua"/>
@@ -22,6 +24,7 @@
     <Script file="Interface\GlobalCopy.lua"/>
     <Script file="System\SlashCommands.lua"/>
     <Script file="Interface\HideClutter.lua"/>
+    <Script file="Interface\UnitNames.lua"/>
     <Script file="Cursor\Crosshair.lua"/>
     <Script file="Cursor\MouseRing.lua"/>
     <Script file="Combat\PetTracker.lua"/>
@@ -29,6 +32,8 @@
     <Script file="Interface\ChatZones.lua"/>
     <Script file="Combat\GcdTracker.lua"/>
     <Script file="Combat\FocusCastBar.lua"/>
+    <Script file="Combat\DamageMeterLayout.lua"/>
+    <Script file="Combat\DamageMeterSkin.lua"/>
     <Script file="System\Performance.lua"/>
     <Script file="Loot\LootFeed.lua"/>
     <Script file="Loot\AuctionPrices.lua"/>

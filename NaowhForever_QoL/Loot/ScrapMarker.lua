@@ -23,11 +23,12 @@ local STEP_DELAY = 0.25
 local WEAPON, ARMOR, QUEST_CLASS, KEY_CLASS = 2, 4, 12, 13
 local MARKED, RULED = 1, 2
 local SELL_PRICE = ns.QoLConstants.SELL_PRICE
-local COMMON = 1
+local POOR, COMMON = 0, 1
 local ROUND = ns.QoLConstants.ROUND
 local LEVELS_RANGE = { 5, 30, 1 }
 local EMPTY = {}
 local LAST_BAG = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS
+local BAGANATOR_CORNER = { corner = "top_right", priority = 1 }
 
 local FOR_ALL = {
     [WEAPON] = { [14] = true, [20] = true },
@@ -56,36 +57,40 @@ local CAN_WEAR = {
 local NEVER_RULED = { [""] = true, INVTYPE_BODY = true, INVTYPE_TABARD = true, INVTYPE_BAG = true,
     INVTYPE_QUIVER = true, INVTYPE_NON_EQUIP_IGNORE = true }
 
-local RULE_WEAR, RULE_OLD = "Can't wear", "Outlevelled"
+local RULE_WEAR, RULE_OLD = ns.L("Can't wear"), ns.L("Outlevelled")
 local TIPS = {
-    sell = { "Scrap: sold at the next vendor", "Scrap by rule: sold at the next vendor" },
-    ask = { "Scrap: offered at the next vendor", "Scrap by rule: offered at the next vendor" },
-    none = { "Scrap", "Scrap by rule" },
+    sell = { ns.L("Scrap: sold at the next vendor"), ns.L("Scrap by rule: sold at the next vendor") },
+    ask = { ns.L("Scrap: offered at the next vendor"), ns.L("Scrap by rule: offered at the next vendor") },
+    none = { ns.L("Scrap"), ns.L("Scrap by rule") },
 }
 local NOT_SCRAP = {
-    quest = " is a quest item, so it can't be scrap.",
+    quest = ns.L(" is a quest item, so it can't be scrap."),
     key = " is a key, so it can't be scrap.",
-    value = " has no sell price, so it can't be scrap.",
-    bis = " is on your BiS list, so it can't be scrap.",
-    set = " is in a gear set, so it can't be scrap.",
+    value = ns.L(" has no sell price, so it can't be scrap."),
+    bis = ns.L(" is on your BiS list, so it can't be scrap."),
+    set = ns.L(" is in a gear set, so it can't be scrap."),
 }
 local VENDOR = { { sell = "Sell", ask = "Ask First", none = "Nothing" }, { "sell", "ask", "none" } }
 local SCOPE = { { account = "Account", char = "This Character" }, { "account", "char" } }
 
-local TEXT_ITEM = "item "
-local TEXT_MARKED = " marked as scrap."
-local TEXT_UNMARKED = " is no longer scrap."
-local TEXT_SOLD = "Sold %d scrap item%s for %s."
-local TEXT_KEPT = " Kept %d protected."
-local TEXT_KEPT_ALL = "Kept %d protected scrap item%s from the vendor."
+local TEXT_ITEM = ns.L("item ")
+local TEXT_MARKED = ns.L(" marked as scrap.")
+local TEXT_UNMARKED = ns.L(" is no longer scrap.")
+local TEXT_SOLD_ONE, TEXT_SOLD = ns.L("Sold %d scrap item for %s."), ns.L("Sold %d scrap items for %s.")
+local TEXT_KEPT = ns.L(" Kept %d protected.")
+local TEXT_KEPT_ALL_ONE = ns.L("Kept %d protected scrap item from the vendor.")
+local TEXT_KEPT_ALL = ns.L("Kept %d protected scrap items from the vendor.")
 local TEXT_COUNT = "x"
 local TEXT_SELL, TEXT_NOT_NOW = "Sell", "Not Now"
-local TEXT_ASK = "Sell your scrap for %s?"
-local TEXT_SUMMARY = "%d item%s marked"
-local TEXT_IN_BAGS = " in your bags"
+local TEXT_ASK = ns.L("Sell your scrap for %s?")
+local TEXT_SUMMARY_ONE, TEXT_SUMMARY = ns.L("%d item marked"), ns.L("%d items marked")
+local TEXT_IN_BAGS = ns.L(" in your bags")
+local TEXT_BAGANATOR = "Naowh Forever Scrap"
 
 local marks, hooked, bagOf, slotOf = {}, {}, {}, {}
 local installed, registered, events = false, false, nil
+local baganator
+local owners = {}
 local atMerchant, offerPending = false, false
 local selling, generation, scheduledFor, pending = false, 0, 0, false
 local nextBag, nextSlot, sold, earned, spared = 0, 1, 0, 0, 0
@@ -104,10 +109,6 @@ local function On()
     return S.Get("enabled") and S.Get("scrapMarker") == true
 end
 Scrap.On = On
-
-local function Plural(n)
-    return n == 1 and "" or "s"
-end
 
 local function SellPrice(id)
     return select(SELL_PRICE, GetItemInfo(id))
@@ -252,12 +253,16 @@ local function OnClick(button, mouse)
     if id then Toggle(id, bag, slot) end
 end
 
-local function Slot(button, over, bag, slot, id)
-    bagOf[button], slotOf[button] = bag, slot
+local function HookClick(button, onClick)
     if not hooked[button] and not InCombatLockdown() then
         hooked[button] = true
-        button:HookScript("OnClick", OnClick)
+        button:HookScript("OnClick", onClick)
     end
+end
+
+local function Slot(button, over, bag, slot, id)
+    bagOf[button], slotOf[button] = bag, slot
+    HookClick(button, OnClick)
     Paint(button, over, id)
 end
 
@@ -281,10 +286,38 @@ local function EllesmereSlot(button, data)
     Slot(button, button._textOverlay or button, data.bag, data.slot, id)
 end
 
+local function BaganatorClick(button, mouse)
+    bagOf[button], slotOf[button] = button:GetBagID(), button:GetID()
+    OnClick(button, mouse)
+end
+
+local function BaganatorInit(button)
+    local mark = NewMark(button, button)
+    owners[mark] = button
+    return mark
+end
+
+local function BaganatorPaint(mark, details)
+    local button = owners[mark]
+    if not On() or not (button.GetBagID and button:GetBagID()) then return false end
+    HookClick(button, BaganatorClick)
+    showMark = S.Get("scrapMarkerShow")
+    local state = showMark and State(details.itemID)
+    if not state then return false end
+    mark:SetAlpha(state == RULED and RULE_ALPHA or 1)
+    return true
+end
+
+local function BaganatorJunk(_, _, id)
+    local _, _, quality, _, _, _, _, _, _, _, price = GetItemInfo(id)
+    return (quality == POOR and price ~= nil and price > 0) or Scrap.IsScrap(id)
+end
+
 local function Repaint()
     if not installed then return end
     Bags.RepaintGame(GameBag)
     if registered then Bags.RefreshEllesmere() end
+    if baganator then baganator.RequestItemButtonsRefresh() end
 end
 
 local function Changed()
@@ -384,11 +417,11 @@ end
 
 local function Finish()
     if sold > 0 then
-        local line = TEXT_SOLD:format(sold, Plural(sold), Parts.Coins(earned))
+        local line = (sold == 1 and TEXT_SOLD_ONE or TEXT_SOLD):format(sold, Parts.Coins(earned))
         if spared > 0 then line = line .. TEXT_KEPT:format(spared) end
         ns.Print(line)
     elseif spared > 0 then
-        ns.Print(TEXT_KEPT_ALL:format(spared, Plural(spared)))
+        ns.Print((spared == 1 and TEXT_KEPT_ALL_ONE or TEXT_KEPT_ALL):format(spared))
     end
     selling, sold, earned, spared = false, 0, 0, 0
     generation = generation + 1
@@ -578,6 +611,12 @@ local function Apply()
             bags.UnregisterItemOverlayIcon(OVERLAY)
         end
     end
+    local api = on and not baganator and Bags.Baganator()
+    if api then
+        baganator = api
+        api.RegisterCornerWidget(TEXT_BAGANATOR, OVERLAY, BaganatorPaint, BaganatorInit, BAGANATOR_CORNER, true)
+        api.RegisterJunkPlugin(TEXT_BAGANATOR, OVERLAY, BaganatorJunk)
+    end
     if selling and not (on and S.Get("scrapMarkerVendor") ~= "none") then Finish() end
     if AskPanel and not (on and S.Get("scrapMarkerVendor") == "ask") then AskPanel:Hide() end
     if not on then
@@ -610,7 +649,7 @@ local function Summary()
     for id in pairs(CharMarks()) do
         if not AccountMarks()[id] then n = n + 1 end
     end
-    local text = TEXT_SUMMARY:format(n, Plural(n))
+    local text = (n == 1 and TEXT_SUMMARY_ONE or TEXT_SUMMARY):format(n)
     local value = Scrap.BagValue()
     if value > 0 then text = text .. ", " .. Parts.Coins(value) .. TEXT_IN_BAGS end
     return text

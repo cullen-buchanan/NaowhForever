@@ -56,7 +56,7 @@ end
 -- With journal false, the Journal has not loaded.
 local function Fixture(class, level, sources, journal)
     local list = Dungeons()
-    local ns = { BiSData = { sources = sources or {}, specs = {} }, QoLSettings = {},
+    local ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower, BiSData = { sources = sources or {}, specs = {} }, QoLSettings = {},
         Journal = journal ~= false and { Items = FACTS, Dungeons = function() return list end } or nil }
     Load(RULES, Env(ns, class, level))
     ns.Shared.ItemFacts = FACTS
@@ -193,11 +193,14 @@ for _, id in ipairs({ 5821, 263435, 263436, 270039, 270046, 272996, 276727, 2772
     284383, 284399, 284401, 284403, 284697, 285190, 285192,
     -- wowsrc's lists read again on 3 Oct 2026, with Wowhead (build/bis_data.py): no source
     -- on either.
-    282653, 282710, 284459 }) do UNSOURCED[id] = true end
+    282653, 282710, 284459,
+    -- wowsrc's lists of 11 Oct 2026 (the daily watch's #379): no source on wowsrc, nor on
+    -- Wowhead's item pages (build/bis_data.py, 12 Oct).
+    274955, 274957, 274963, 286987, 286988, 286989 }) do UNSOURCED[id] = true end
 
 Case("every ranked item has a source, from the Journal's dungeons or wowsrc", function()
     local dungeons = {}
-    local ns = { QoLSettings = {}, Shared = {}, Journal = {
+    local ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower, QoLSettings = {}, Shared = {}, Journal = {
         AddDungeon = function(_, dungeon) dungeons[#dungeons + 1] = dungeon end,
         Dungeons = function() return dungeons end,
     } }
@@ -207,11 +210,15 @@ Case("every ranked item has a source, from the Journal's dungeons or wowsrc", fu
     for _, path in ipairs(TocFiles("^NaowhForever_DungeonJournal/Data/Dungeons/.*%.lua$")) do files[#files + 1] = path end
     Load(files, env)
     Load(RULES, env)
-    local missing = {}
+    -- Each item once, in the order first met: the daily watch quotes this line.
+    local missing, named = {}, {}
     for _, spec in ipairs(ns.BiSData.specs) do
         for _, ids in pairs(spec.slots) do
             for _, id in ipairs(ids) do
-                if not ns.BiSSource(id) and not UNSOURCED[id] then missing[#missing + 1] = id end
+                if not ns.BiSSource(id) and not UNSOURCED[id] and not named[id] then
+                    named[id] = true
+                    missing[#missing + 1] = id
+                end
             end
         end
     end

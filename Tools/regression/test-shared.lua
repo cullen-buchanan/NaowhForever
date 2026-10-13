@@ -61,7 +61,7 @@ local coinCalls = 0
 local tooltip = Frame()
 tooltip.GetOwner = function() return nil end
 
-local ns = {
+local ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower,
     THEME = setmetatable({}, { __index = function() return WHITE end }),
     Color = function(_, text) return tostring(text) end,
     Font = function(parent) return Frame(parent) end,
@@ -324,6 +324,28 @@ local settingsView = settingsParent.settingsView
 check("the settings page drew its card", settingsView.pools.setting.used == 3 and settingsView.pools.group.used == 1)
 Measure(check)("a settings page redrawn", 1, function() settingsView:Redraw() end)
 
+do
+    local switched, defaults = {}, { on = true }
+    local switchStore = {
+        Get = function(k) if switched[k] == nil then return defaults[k] end return switched[k] end,
+        Raw = function(k) return switched[k] end,
+        Default = function(k) return defaults[k] end,
+        Set = function(k, v) switched[k] = v end,
+        OnChange = NOTHING,
+    }
+    Settings.Page("Test/Switch", switchStore):Card({ id = "switch", name = "Switch", switch = "on", rows = {
+        { key = "shown", label = "Shown", toggle = true },
+    } })
+    local parent = Frame()
+    Settings.Render(parent, "Test/Switch", NOTHING)
+    local head = parent.settingsView.pools.cardHead[1]
+    check("a card switch at its default has no changed dot", head.dot.shown == false)
+    switched.on = false
+    parent.settingsView:Redraw()
+    check("switched off from its default, the card head shows the dot", head.dot.shown == true)
+    check("and it has no click, so a stray click never switches a feature on", head.dot.scripts.OnClick == nil)
+end
+
 -------------------------------------------------------------------------------
 --  A tracker's window (Parts.TrackerPanel): built only when asked, its parts where the
 --  options ask for them, rows pooled, the body scrolling past its height, its place kept.
@@ -429,7 +451,12 @@ local helpers = assert(widgets:match("\n(local function SharedMedia%(%).-\nfunct
     or widgets:match("\n(function UI%.FontPath%(name%).-\nfunction UI%.TexturePath%(name, fallback%).-\nend)\n"),
     "Widgets: FontPath to TexturePath")
 local texts = {}
-for line in widgets:gmatch("\n(local TEXT_[%w_, ]+ = \"[^\n]*\")\n") do texts[#texts + 1] = line end
+for line in widgets:gmatch("[^\n]+") do
+    local open, close = select(2, line:gsub("%(", "")), select(2, line:gsub("%)", ""))
+    if line:match("^local TEXT_[%w_, ]+ = ") and line:match("[\"%)]$") and open == close then
+        texts[#texts + 1] = line
+    end
+end
 helpers = table.concat(texts, "\n") .. "\n" .. helpers
 local MEDIA = { font = { Naowh = "naowh.ttf" },
     statusbar = { Blizzard = "bar.blp", Solid = "solid", ["Naowh Gradient"] = "gradient.tga" } }
@@ -639,6 +666,24 @@ check("the card's Reset puts back what is set in the cog", cogValues.countX == 0
 cogIcon = PageRow("Show Count").icons[1]
 cogIcon.scripts.OnClick(cogIcon)
 check("a second click on the cog closes it", not panel.shown)
+
+-- A card folded while its cog is open takes the cog's panel with it.
+cogIcon = PageRow("Show Count").icons[1]
+cogIcon.scripts.OnClick(cogIcon)
+check("the cog is open again", panel.shown)
+local otherCard = Settings.Page("Test/Folded", cogStore):Card({ id = "f", name = "F", rows = {
+    { key = "other", label = "Other", toggle = true } } })
+local foldedParent = Frame()
+Settings.Render(foldedParent, "Test/Folded", NOTHING)
+Settings.SetOpen(otherCard, false)
+foldedParent.settingsView:Redraw()
+check("folding another card leaves the cog's panel open", panel.shown)
+Settings.SetOpen(cogCard, false)
+cogPage:Redraw()
+check("folding its card closes the cog's panel", not panel.shown)
+Settings.SetOpen(cogCard, true)
+cogPage:Redraw()
+check("and opening the card does not bring it back", not panel.shown)
 
 -- The sidebar's search: a match set in a cog's panel.
 Settings.Render(cogParent, "Test/Cogs", NOTHING, { all = {}, cards = { [cogCard.uid] = { ["Count Size"] = true } } })

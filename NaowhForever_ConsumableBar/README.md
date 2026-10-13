@@ -2,10 +2,10 @@
 
 Your consumables on a bar you can click: potions, elixirs, flasks, scrolls, food, bandages,
 weapon stones and oils, healthstones, explosives and engineering devices. Each icon shows how many
-you carry, greys out with NONE in red when you run out (or hides, with Hide When Out), and has its
-cooldown and its key. Edit Items, the bar's own window, adds items (+, by ID or name, or dragged
-from the bags), puts them in order, and opens each one's settings beside it. Off by default
-(`consumableBar` in `Core/Features.lua`): while it is off nothing is built or listened to.
+you carry, leaves the bar when you run out (or greys out with NONE in red, with Hide When Out
+off), and has its cooldown and its key. Edit Items, the bar's own window, adds items (+, by ID or
+name, or dragged from the bags), puts them in order, and opens each one's settings beside it. Off by
+default (`consumableBar` in `Core/Features.lua`): while it is off nothing is built or listened to.
 
 A module addon of its own, built on the item bar in `Shared/` (`Shared/UI/ItemBar.lua`, with
 `Shared/UI/Anchor.lua` and `Shared/Game/ActionKeys.lua`) that QoL's Food & Drink Bar uses too. Its
@@ -21,7 +21,7 @@ NaowhForever_ConsumableBar/
   ConsumableBar.lua   the module table (ns.ConsumableBar, CB): entries, their settings, change listeners
   Constants.lua       the numbers several files share (CB.C)
   Data/
-    Categories.lua    the kinds of consumable: by the game's subclass, Trade Goods, weapon items by ID (CB.Data)
+    Categories.lua    the kinds of consumable: by the game's subclass, Trade Goods, weapon items and stat scrolls by ID (CB.Data)
   Items.lua           the item rules: what is a consumable, the list, typed items, Scan Bags, Clear
   Keys.lua            the key that uses each entry: its own button's binding, or an action button holding it
   Used.lua            Hide After Use: the item's cooldown, buff or weapon enchant, and when to look again
@@ -56,6 +56,8 @@ NaowhForever_ConsumableBar/
 - A cooldown counts only when it started with the item's own cast, seen as `UNIT_SPELLCAST_SUCCEEDED`
   (within `CAST_SLOP`, 1 s): potions share one cooldown, and drinking a healing potion must not hide
   a mana potion. A cooldown from before a reload is not seen, so the item shows until its next use.
+- Only the six stat scrolls count as scrolls (`SCROLLS`): the game files other items as Scrolls too,
+  and only a scroll that gives a buff belongs on the bar.
 - A cooldown of `GCD` (1.5 s) or less is the global cooldown, not the item's own.
 - A setting is applied as far as it reaches: the bar's look (fonts, offsets, background, an item's
   own text) restyles the icons, what the bar does not show (window opacity, filters, declined items,
@@ -66,9 +68,15 @@ NaowhForever_ConsumableBar/
   out, no longer in the bags or on the bar already, it is skipped.
 - After Hide After Use hides an item, the bar looks again when its cooldown or effect should end,
   `WAKE_LEAD` (0.1 s) after. Only the soonest look is scheduled; a later one just looks again.
-- An icon hidden by Hide When Out takes no clicks, so it does not catch ones meant for what is
-  under it. Mouse input on a secure button changes only out of combat: one that runs out in a fight
-  fades at once and stops taking clicks when the fight ends.
+- Hide When Out (on by default) lays the bar out with only what you carry, in the saved order, so
+  the bar closes up when you run out and an item comes back to its place when you get more. A
+  Smart Macro counts as out while it names no item you carry. Laying out secure buttons waits for
+  the end of a fight: one that runs out in a fight fades at once and leaves when the fight ends,
+  and one gained in a fight joins after it. Unlock Mode shows every item.
+- Other Consumables are off in the scan filters by default: the game files quest items, holiday
+  items and the like there, and Scan Bags would fill the bar with them.
+- Remove Empty takes off the items you have none of in your bags; Smart Macros stay, since they
+  pick whatever you carry.
 - Counts, keys, the grey icon, NONE and cooldowns are plain text and textures, and update in combat.
 - NONE follows the icon's size, not the count's font: as large as fits between the edges.
 - Each icon carries its own piece of the background, reaching halfway into the spacing toward each
@@ -83,6 +91,24 @@ NaowhForever_ConsumableBar/
 - An item given its own text before the Custom Text switch existed keeps showing it.
 - The bar starts at `HOME_Y` (-260), under the Food & Drink Bar's spot (-210), so the two never sit
   on top of each other.
+- An entry is an item ID or a Smart Macro (`macro:health`, `macro:healthstone`, `macro:healthPotion`,
+  `macro:mana`, `macro:food`, `macro:drink`, `macro:bandage`, while the Macros module is loaded: it
+  loads first, `OptionalDeps`). A macro's button runs it by name, so Macros' rewrite needs nothing
+  protected here. The bar never flips your Macros switches: Macros keeps a macro the bar uses
+  (`ns.ConsumableBarUsesMacro`), and the bar only asks it to update (`ns.UpdateManagedMacros`) when
+  the macros it uses change, so a bar that is off costs nothing. A rewrite in combat only redraws
+  the icon, since resizing a secure button waits for the fight to end.
+- NF Health's priority and NF Food's Food Only sit behind cogs on their rows. They are the Macros
+  module's own settings (`ns.MacroSettings`), shown in both places, so there is never a second copy.
+- A Smart Macro covers a kind of item: NF Health healthstones and healing potions, NF Healthstone
+  and NF Health Potion one of those each, NF Mana mana potions, NF Food food and drink (food alone
+  with Macros' Food Only on), NF Drink drinks, NF Bandage bandages. Scan Bags and Ask to Add skip
+  what is covered; adding one by hand asks first.
+- For a class with no mana (warriors and rogues, `ns.UsesMana`) NF Mana and NF Drink are
+  not shown, even from another character's profile, but stay saved and kept by Macros
+  (`ns.ConsumableBarUsesMacro` reads the saved list): the NF macros are account-wide, so letting one
+  go would delete a caster's macro from their action bars. Edits on that character keep them for the next; their switches wait, saying why, and Scan Bags and Ask to
+  Add skip drinks and mana potions; adding one by hand asks first.
 - Anchoring is the shared one (`Shared/UI/Anchor.lua`): unit frames there, and the HUD Editor's own
   Anchor for another Naowh Forever element (Anchor to an Element). Another addon's frame could move
   in combat, and the bar's secure buttons on it would block that.

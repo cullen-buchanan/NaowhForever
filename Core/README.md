@@ -126,6 +126,9 @@ Namespace and builds
   from a client that was not reloaded.
 - Libs/ is not in git; the packager adds it. An install from the source zip has none, so login
   says so once instead of features failing one by one.
+- The Damage Meter turns the game's meter (`damageMeterEnabled`) off and keeps what it was on the
+  account. With that addon disabled or removed nothing of it runs to put it back, so the core does at
+  login when it is not loaded.
 
 Theme
 - Naowh's scheme is dark grey with his blue (#0091ed) as the single accent. Each preset keeps text
@@ -287,7 +290,11 @@ Profile strings
   and notes fit the game's limits, lists have no holes, and there are at most 500 consumables and
   100 class macros a class. One bad entry leaves that whole part out, and only the fields the addon
   reads are copied in.
-- What one player answered about EllesmereUI's windows (`ns.PROFILE_OWN`) is never shared.
+- What one player answered about EllesmereUI's windows, and their invite buttons' friends (`ns.PROFILE_OWN`),
+  are never shared.
+- A module's on/off switch lives in the WoW AddOn list, not SavedVariables, so the Settings part
+  also carries each module's addon name and state (`__modules`) and import applies it with
+  `EnableAddOn`/`DisableAddOn` rather than merging it into the module's own settings table.
 - The skin travels in a profile string's Look part, with the theme, font and window scale. A
   consumable needs only its item ID; its buff IDs may be left out.
 - A multiline edit box is as tall as its text, so an empty one is given a height or it takes no

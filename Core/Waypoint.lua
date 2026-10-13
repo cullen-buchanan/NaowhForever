@@ -7,11 +7,13 @@ local ROUTE_MIN_STOPS = 2
 local STOP_FIELDS = 6
 local TOMTOM_FROM = "Naowh Forever"
 local TEXT_SPOT = "%s%s: %s %.1f, %.1f"
-local TEXT_TOMTOM = "TomTom waypoint for "
-local TEXT_PLACED = "Waypoint for "
-local TEXT_ROUTE_STOP = "%s, stop %d of %d: %s%s"
-local TEXT_NO_WAYPOINTS = "That map does not take waypoints."
-local TEXT_LATER = " (placed when you close the map)"
+local TEXT_TOMTOM = ns.L("TomTom waypoint for ")
+local TEXT_PLACED = ns.L("Waypoint for ")
+local TEXT_ROUTE_STOP = ns.L("%s, stop %d of %d: %s%s")
+local TEXT_NO_WAYPOINTS = ns.L("That map does not take waypoints.")
+local TEXT_LATER = ns.L(" (placed when you close the map)")
+local PREVIEW_TEMPLATE = "NaowhForeverWaypointPreviewPinTemplate"
+local WORLD_POS_RETURN = 2
 
 ns.WAYPOINT_HOLD = 4
 
@@ -20,7 +22,7 @@ local route
 local arrivals = 0
 local watch = CreateFrame("Frame")
 local CLEAR = {}
-local pending, held
+local pending, held, preview
 
 local function MapOpen()
     return WorldMapFrame ~= nil and WorldMapFrame:IsVisible()
@@ -61,14 +63,57 @@ function ns.WaypointLink(map, x, y)
 end
 
 local function SetNow(title, map, x, y, note, icon)
+    ns.placedWaypoint = { title = title, note = note, icon = icon, map = map, x = x, y = y }
     C_Map.SetUserWaypoint(MapPoint(map, x, y))
     if C_SuperTrack then C_SuperTrack.SetSuperTrackedUserWaypoint(true) end
-    ns.placedWaypoint = { title = title, note = note, icon = icon, map = map, x = x, y = y }
 end
 
 local function ClearNow()
+    ns.placedWaypoint = nil
     C_Map.ClearUserWaypoint()
     if C_SuperTrack then C_SuperTrack.ClearAllSuperTracked() end
+end
+
+local function TrackNow(quest)
+    C_Map.ClearUserWaypoint()
+    C_SuperTrack.SetSuperTrackedQuestID(quest)
+end
+
+NaowhForeverWaypointPreviewPinMixin = CreateFromMixins(MapCanvasPinMixin)
+
+function NaowhForeverWaypointPreviewPinMixin:OnLoad()
+    self:SetScalingLimits(1, 1.0, 1.2)
+end
+
+function NaowhForeverWaypointPreviewPinMixin:OnAcquired()
+    self:UseFrameLevelType("PIN_FRAME_LEVEL_WAYPOINT_LOCATION")
+end
+
+function NaowhForeverWaypointPreviewPinMixin:CheckMouseButtonPassthrough() end
+
+local function PreviewSpot(mapID, map, x, y)
+    if map == mapID then return x, y end
+    local continent, world = C_Map.GetWorldPosFromMapPos(map, CreateVector2D(x, y))
+    local pos = continent and world and select(WORLD_POS_RETURN, C_Map.GetMapPosFromWorldPos(continent, world, mapID))
+    if not pos then return end
+    local px, py = pos:GetXY()
+    if px >= 0 and px <= 1 and py >= 0 and py <= 1 then return px, py end
+end
+
+local function NewPreview()
+    local provider = CreateFromMixins(MapCanvasDataProviderMixin)
+    function provider:RemoveAllData()
+        self:GetMap():RemoveAllPinsByTemplate(PREVIEW_TEMPLATE)
+    end
+    function provider:RefreshAllData()
+        self:RemoveAllData()
+        if not (pending and pending[2]) then return end
+        local map = self:GetMap()
+        local x, y = PreviewSpot(map:GetMapID(), pending[2], pending[3] / PERCENT, pending[4] / PERCENT)
+        if x then map:AcquirePin(PREVIEW_TEMPLATE):SetPosition(x, y) end
+    end
+    WorldMapFrame:AddDataProvider(provider)
+    return provider
 end
 
 local function Flush()
@@ -76,12 +121,20 @@ local function Flush()
     if not change then return end
     pending = nil
     held:UnregisterAllEvents()
-    if change == CLEAR then ClearNow() else SetNow(unpack(change, 1, STOP_FIELDS)) end
+    preview:RemoveAllData()
+    if change == CLEAR then
+        ClearNow()
+    elseif change.quest then
+        TrackNow(change.quest)
+    else
+        SetNow(unpack(change, 1, STOP_FIELDS))
+    end
 end
 
 local function DropPending()
     pending = nil
     held:UnregisterAllEvents()
+    preview:RemoveAllData()
 end
 
 local function Hold(change)
@@ -90,8 +143,10 @@ local function Hold(change)
         held = CreateFrame("Frame")
         held:SetScript("OnEvent", DropPending)
         WorldMapFrame:HookScript("OnHide", Flush)
+        preview = NewPreview()
     end
     held:RegisterEvent("USER_WAYPOINT_UPDATED")
+    preview:RefreshAllData()
 end
 
 local function SetGameWaypoint(title, map, x, y, note, icon)
@@ -103,7 +158,12 @@ local function SetGameWaypoint(title, map, x, y, note, icon)
     return true
 end
 
+function ns.TrackQuest(quest)
+    if MapOpen() then Hold({ quest = quest }) else TrackNow(quest) end
+end
+
 function ns.ClearWaypoint()
+    if ns.JourneyCancel then ns.JourneyCancel() end
     if MapOpen() then Hold(CLEAR) else ClearNow() end
 end
 
@@ -112,8 +172,16 @@ local function EndRoute()
     watch:UnregisterAllEvents()
 end
 
+function ns.ShowJourneyStep(title, map, x, y, note, icon)
+    EndRoute()
+    if not C_Map.CanSetUserWaypointOnMap(map) then return false end
+    SetGameWaypoint(title, map, x, y, note, icon)
+    return true
+end
+
 function ns.PlaceWaypoint(title, map, x, y, note, icon)
     EndRoute()
+    if ns.JourneyTo and ns.JourneyTo(title, { { title, map, x, y, note, icon } }) then return true end
     local pin = ns.WaypointPinOn and ns.WaypointPinOn()
     if not pin and TomTom and TomTom.AddWaypoint and PlaceTomTom(title, map, x, y, note) then return true end
     if not C_Map.CanSetUserWaypointOnMap(map) then
@@ -168,6 +236,10 @@ end
 watch:SetScript("OnEvent", OnRouteEvent)
 
 function ns.PlaceWaypointRoute(title, stops)
+    if ns.JourneyTo and ns.JourneyTo(title, stops) then
+        EndRoute()
+        return true
+    end
     if #stops < ROUTE_MIN_STOPS then
         local stop = stops[1]
         return stop ~= nil and ns.PlaceWaypoint(stop[1], stop[2], stop[3], stop[4], stop[5], stop[6])
@@ -180,6 +252,10 @@ function ns.PlaceWaypointRoute(title, stops)
 end
 
 function ns.WaypointRoute()
+    if ns.JourneyStep then
+        local title, at, n, nextTitle = ns.JourneyStep()
+        if title then return title, at, n, nextTitle end
+    end
     if not route then return end
     local nextStop = route.stops[route.at + 1]
     return route.title, route.at, #route.stops, nextStop and nextStop[1]

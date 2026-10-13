@@ -19,11 +19,11 @@ local PLACE_DOT, TITLE_RGB, TIP_X = St.PLACE_DOT, St.TIP_TITLE_RGB, St.CURSOR_TI
 local SLOT_NAME_PAD = 8
 local ARROW_SIZE, ARROW_GAP = 10, 4
 local OPEN_TURN = St.OPEN_TURN
-local TEXT_HINT = "Click: change picks" .. PLACE_DOT .. "Right-click: Wowhead link"
-local TEXT_PICK_IT = "Click to pick its BiS."
-local TEXT_ADD_BACKUP = "Add a backup pick"
-local TEXT_PICK_BIS = "Pick its BiS"
-local TEXT_PICKS = "picks"
+local TEXT_HINT = ns.L("Click: change picks") .. PLACE_DOT .. ns.L("Right-click: Wowhead link")
+local TEXT_PICK_IT = ns.L("Click to pick its BiS.")
+local TEXT_ADD_BACKUP = ns.L("Add a backup pick")
+local TEXT_PICK_BIS = ns.L("Pick its BiS")
+local TEXT_PICKS = ns.L("picks")
 local WOWHEAD_KIND = B.C.WOWHEAD_KIND
 
 local Picks = B.View.Memo("%d %s")
@@ -66,7 +66,7 @@ local function SlotTipEnter(zone)
     local row = zone:GetParent()
     if row.bis then return ItemTipEnter(zone, row) end
     if not Tip(zone, "ANCHOR_TOP") then return end
-    GameTooltip:SetText(ns.L(Items.SLOT_NAME[row.slot]), TITLE_RGB.r, TITLE_RGB.g, TITLE_RGB.b)
+    GameTooltip:SetText(Items.SlotName(row.slot), TITLE_RGB.r, TITLE_RGB.g, TITLE_RGB.b)
     GameTooltip:AddLine(TEXT_PICK_IT, T.accentSoft.r, T.accentSoft.g, T.accentSoft.b)
     GameTooltip:Show()
 end
@@ -186,7 +186,7 @@ local function Set(row, slot, bis, count, open)
     row.hover:Hide()
     row.add:Hide()
     row.stripe:SetShown(view.striped)
-    row.slotName:SetText(ns.L(Items.SLOT_NAME[slot]))
+    row.slotName:SetText(Items.SlotName(slot))
     local gain = bis and view.gains and view.gains[slot]
     Cells.PaintGain(row.gain, gain, view.mostGain)
     row.name:SetPoint("RIGHT", gain and row.gain or row.meta, "LEFT", -GAP, 0)

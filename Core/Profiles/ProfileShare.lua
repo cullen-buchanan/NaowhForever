@@ -16,8 +16,8 @@ local ITEM_ID_LIMIT = 2147483648
 local MAX_PICKS = 50
 local ZERO = "\0"
 local DEFAULT_PROFILE = "Default"
-local IMPORTED_PROFILE = "Imported Profile"
-local IMPORTED_BUILD, IMPORTED_SPEC = "Imported Build", "Imported"
+local IMPORTED_PROFILE = ns.L("Imported Profile")
+local IMPORTED_BUILD, IMPORTED_SPEC = ns.L("Imported Build"), ns.L("Imported")
 local SR_KEY, MACROS_KEY = "tankReminder", "macros"
 local OLD_CONSUMABLES_KEYS = { "smartReminders", "reminders" }
 local CONSUMABLE_CATEGORIES = { food = true, flask = true, scroll = true, battle = true, guardian = true }
@@ -26,41 +26,42 @@ local LOOK_TYPES = { themePreset = "string", themeColors = "table", uiFont = "st
     skin = "string" }
 local GEAR_SLOT = { [1] = true, [2] = true, [3] = true, [5] = true, [6] = true, [7] = true, [8] = true, [9] = true,
     [10] = true, [11] = true, [12] = true, [13] = true, [14] = true, [15] = true, [16] = true, [17] = true, [18] = true }
-local OWN = { qol = { "characterPanelAsked", "characterPanelTookOver", "inspectPanelAsked", "inspectPanelTookOver" } }
+local OWN = { qol = { "characterPanelAsked", "characterPanelTookOver", "inspectPanelAsked", "inspectPanelTookOver",
+    "groupInvites" } }
 local PARTS = {
     { key = "settings", label = "Settings", help = "Every module's settings and positions",
-      share = "Every module's settings and where its frames sit." },
+      share = ns.L("Every module's settings and where its frames sit.") },
     { key = "macros", label = "Macros", help = "Your class macros and the Macros settings",
-      share = "Your class macros and the Macros settings." },
+      share = ns.L("Your class macros and the Macros settings.") },
     { key = "library", label = "Macro Library", help = "Added next to your Library, never over it",
-      share = "The macros you saved to the Forge's Library." },
+      share = ns.L("The macros you saved to the Forge's Library.") },
     { key = "consumables", label = "Consumables", help = "The consumables your reminders watch",
       share = "The consumables your reminders watch." },
     { key = "builds", label = "Talent Builds", help = "Added next to your saved builds",
-      share = "The talent builds you saved in the Training Planner." },
+      share = ns.L("The talent builds you saved in the Training Planner.") },
     { key = "bisLists", label = "BiS Lists", help = "Added next to your own lists, never over them",
-      share = "Your BiS lists, for every class." },
+      share = ns.L("Your BiS lists, for every class.") },
     { key = "look", label = "Look", help = "Skin, theme colors, font and window scale, for every profile",
-      share = "Skin, theme colors, font and window scale." },
+      share = ns.L("Skin, theme colors, font and window scale.") },
 }
 local API_PARTS = { settings = true, macros = true, library = true, consumables = true, builds = true,
     bisLists = true, look = true }
-local LIST_NOUN = { bisLists = "lists", library = "macros", builds = "builds" }
-local TEXT_NO_LIBRARIES = "The serializer libraries are missing from this build."
-local TEXT_TOO_BIG_PROFILE = "This profile is too big to share."
-local TEXT_TICK_PART = "Tick a part to share."
-local TEXT_NOTHING_TO_EXPORT = "There is nothing to export yet."
-local TEXT_NOT_PROFILE = "This is not a Naowh Forever profile string."
-local TEXT_NO_PACKS = "Reminder Packs are no longer supported."
-local TEXT_TOO_BIG = "This string is too big."
-local TEXT_DAMAGED = "The string is damaged: copy it again in full."
-local TEXT_NEWER = "This string is from a newer Naowh Forever: update first."
-local TEXT_MODULES = "%d modules"
-local TEXT_CLASS_MACROS = "%d class macros"
-local TEXT_NOTHING_TO_READ = "Nothing to read."
-local TEXT_IMPORT_FAILED = "Naowh Forever import failed: "
-local TEXT_SPEC_SWITCH_OFF = "Per-spec profile switching is off while every character shares '%s'; your spec "
-    .. "choices are kept if you switch it back on."
+local LIST_NOUN = { bisLists = ns.L("lists"), library = ns.L("macros"), builds = ns.L("builds") }
+local TEXT_NO_LIBRARIES = ns.L("The serializer libraries are missing from this build.")
+local TEXT_TOO_BIG_PROFILE = ns.L("This profile is too big to share.")
+local TEXT_TICK_PART = ns.L("Tick a part to share.")
+local TEXT_NOTHING_TO_EXPORT = ns.L("There is nothing to export yet.")
+local TEXT_NOT_PROFILE = ns.L("This is not a Naowh Forever profile string.")
+local TEXT_NO_PACKS = ns.L("Reminder Packs are no longer supported.")
+local TEXT_TOO_BIG = ns.L("This string is too big.")
+local TEXT_DAMAGED = ns.L("The string is damaged: copy it again in full.")
+local TEXT_NEWER = ns.L("This string is from a newer Naowh Forever: update first.")
+local TEXT_MODULES = ns.L("%d modules")
+local TEXT_CLASS_MACROS = ns.L("%d class macros")
+local TEXT_NOTHING_TO_READ = ns.L("Nothing to read.")
+local TEXT_IMPORT_FAILED = ns.L("Naowh Forever import failed: ")
+local TEXT_SPEC_SWITCH_OFF = ns.L("Per-spec profile switching is off while every character shares '%s'; your spec "
+    .. "choices are kept if you switch it back on.")
 
 local Profiles = {}
 ns.Profiles = Profiles
@@ -204,6 +205,20 @@ local function CollectSettings(root, budget)
     return next(settings) and settings or nil
 end
 
+local MODULE_STATE_KEY = "__modules"
+
+local function CollectModuleState()
+    if type(ns.ModuleAddons) ~= "function" then return nil end
+    local out
+    for _, m in ipairs(ns.ModuleAddons()) do
+        if type(m.addon) == "string" then
+            out = out or {}
+            out[m.addon] = m.on == true
+        end
+    end
+    return out
+end
+
 local function CollectMacros(root, utility, budget)
     local macros = {}
     if type(root.macros) == "table" then macros.module = Plain(root.macros, 1, budget) end
@@ -268,6 +283,11 @@ local function Collect()
     local utility = Utility(root.tankReminder)
     local parts = {}
     parts.settings = CollectSettings(root, budget)
+    local moduleState = CollectModuleState()
+    if moduleState then
+        parts.settings = parts.settings or {}
+        parts.settings[MODULE_STATE_KEY] = moduleState
+    end
     parts.macros = CollectMacros(root, utility, budget)
     parts.consumables = CollectConsumables(utility, budget)
     parts.bisLists = CollectBisLists(account, budget)
@@ -304,10 +324,22 @@ local function OldConsumables(parts)
     end
 end
 
+local function ValidModuleState(state)
+    if type(state) ~= "table" then return false end
+    for addon, on in pairs(state) do
+        if type(addon) ~= "string" or type(on) ~= "boolean" then return false end
+    end
+    return true
+end
+
 local function CleanParts(payload)
     local Text, parts = ns.Shared.Decode.Text, payload.parts
     payload.name, payload.author = Text(payload.name, TEXT_MAX), Text(payload.author, TEXT_MAX)
     payload.made = Text(payload.made, TEXT_MAX)
+    if type(parts.settings) == "table" then
+        local state = parts.settings[MODULE_STATE_KEY]
+        parts.settings[MODULE_STATE_KEY] = ValidModuleState(state) and state or nil
+    end
     OldConsumables(parts)
     parts.consumables = ValidConsumables(parts.consumables) and CleanConsumables(parts.consumables) or nil
     local macros = parts.macros
@@ -356,7 +388,11 @@ local function ListCount(data)
 end
 
 local function PartDetail(key, data)
-    if key == "settings" then return TEXT_MODULES:format(Count(data)) end
+    if key == "settings" then
+        local n = Count(data)
+        if data[MODULE_STATE_KEY] then n = n - 1 end
+        return TEXT_MODULES:format(n)
+    end
     if key == "macros" then return TEXT_CLASS_MACROS:format(ClassMacroCount(data)) end
     if LIST_NOUN[key] then return ("%d %s"):format(ListCount(data), LIST_NOUN[key]) end
 end
@@ -586,6 +622,23 @@ local function AddBuilds(incoming)
     return added
 end
 
+local function ApplyModuleState(state)
+    if type(state) ~= "table" or type(ns.ModuleAddons) ~= "function" or type(ns.LinkedAddons) ~= "function" then
+        return
+    end
+    for _, m in ipairs(ns.ModuleAddons()) do
+        local want = state[m.addon]
+        if want ~= nil and want ~= m.on then
+            if want then
+                for _, addon in ipairs(ns.LinkedAddons(m.addon, true)) do C_AddOns.EnableAddOn(addon) end
+                if m.store then m.store.Set(m.key, true) end
+            else
+                C_AddOns.DisableAddOn(m.addon)
+            end
+        end
+    end
+end
+
 local function ImportSettings(root, settings, wanted)
     for key, values in pairs(settings) do
         local defaults = ns.ModuleDefaults(key)
@@ -593,6 +646,7 @@ local function ImportSettings(root, settings, wanted)
             root[key] = DropOwn(key, Checked(values, defaults))
         end
     end
+    ApplyModuleState(settings[MODULE_STATE_KEY])
     if wanted.acting then return end
     for _, item in ipairs(ACTING) do
         local values = root[item.module]

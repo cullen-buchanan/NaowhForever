@@ -10,7 +10,7 @@ local tomtom, set, tracked, printed, timers = {}, {}, 0, {}, {}
 local current   -- the game's user waypoint, as C_Map.GetUserWaypoint gives it
 local pinOn = false
 local watch
-local ns = {
+local ns = { L = dofile("Tools/regression/locale_stub.lua").L, Upper = string.upper, Lower = string.lower,
     Print = function(msg) printed[#printed + 1] = msg end,
     WaypointPinOn = function() return pinOn end,
 }
@@ -48,6 +48,13 @@ local env = setmetatable({
         GetUserWaypoint = function() return current end,
         GetMapInfo = function() return { name = "Orgrimmar" } end,
     },
+    CreateFromMixins = function(...)
+        local t = {}
+        for i = 1, select("#", ...) do for k, v in pairs((select(i, ...))) do t[k] = v end end
+        return t
+    end,
+    MapCanvasPinMixin = {},
+    MapCanvasDataProviderMixin = {},
     C_SuperTrack = { SetSuperTrackedUserWaypoint = function() tracked = tracked + 1 end },
     UiMapPoint = { CreateFromCoordinates = function(map, x, y) return { map = map, x = x, y = y } end },
 }, { __index = _G })

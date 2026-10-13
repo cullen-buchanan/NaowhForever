@@ -40,6 +40,24 @@ class SyncBadges(unittest.TestCase):
         ))
         self.assertNotIn("\n", text.replace("\r\n", ""))
 
+    def test_an_epic_patron_keeps_the_tier_and_a_legendary_one_needs_none(self):
+        text = sync_badges.render(sync_badges.validated({"patrons": {"90": {
+            "Player-4613-006EB819": {"since": "2026-09", "tier": "epic"},
+            "Player-4618-0000AAAA": {"tier": "epic"},
+            "Player-4620-0000BBBB": {"since": "2026-10", "tier": "legendary"},
+        }}}))
+        self.assertIn('["Player-4613-006EB819"] = { since = "2026-09", tier = "epic" },\r\n', text)
+        self.assertIn('["Player-4618-0000AAAA"] = { tier = "epic" },\r\n', text)
+        self.assertIn('["Player-4620-0000BBBB"] = { since = "2026-10" },\r\n', text)
+
+    def test_the_claim_hash_is_kept(self):
+        text = sync_badges.render(sync_badges.validated({"patrons": {"90": {
+            "Player-4613-006EB819": {"since": "2026-09", "tier": "epic", "claim": "8c39fddd"},
+            "Player-4618-0000AAAA": {"tier": "legendary", "claim": "04bb847a"},
+        }}}))
+        self.assertIn('["Player-4613-006EB819"] = { since = "2026-09", tier = "epic", claim = "8c39fddd" },\r\n', text)
+        self.assertIn('["Player-4618-0000AAAA"] = { claim = "04bb847a" },\r\n', text)
+
     def test_anything_unexpected_stops_the_sync(self):
         for bad in (
             [],
@@ -50,6 +68,11 @@ class SyncBadges(unittest.TestCase):
             {"patrons": {"90": {"Player-1-0000aaaa": {}}}},
             {"patrons": {"90": {"Player-1-0000AAAA": {"since": "2026-13"}}}},
             {"patrons": {"90": {"Player-1-0000AAAA": "2026-09"}}},
+            {"patrons": {"90": {"Player-1-0000AAAA": {"tier": "rare"}}}},
+            {"patrons": {"90": {"Player-1-0000AAAA": {"tier": None}}}},
+            {"patrons": {"90": {"Player-1-0000AAAA": {"claim": "8C39FDDD"}}}},
+            {"patrons": {"90": {"Player-1-0000AAAA": {"claim": "8c39fdd"}}}},
+            {"patrons": {"90": {"Player-1-0000AAAA": {"claim": "K7P2-9XQM"}}}},
         ):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 sync_badges.validated(bad)

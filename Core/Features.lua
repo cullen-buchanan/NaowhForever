@@ -24,7 +24,10 @@ ns.FEATURES = {
         questShare = true,
         gossipAuto = false,
         groupButtons = false,
+        freeForAll = false,
         combatTimer = false,
+        damageMeterSkin = false,
+        damageMeterFree = false,
         cursorCooldown = false,
         globalCopy = false,
         badgeChat = true,
@@ -65,7 +68,6 @@ ns.FEATURES = {
         mapUnexplored = true,
         zoneLevels = false,
         mapSkyborne = false,
-        mapSize = false,
         gearSets = true,
         gearBarVisible = true,
         trinketBar = false,
@@ -112,6 +114,11 @@ ns.FEATURES = {
     },
     statWeights = {
         enabled = false,
+    },
+    journeys = {
+        enabled = false,
+        card = true,
+        learnLifts = false,
     },
     training = {
         enabled = true,
@@ -182,6 +189,9 @@ ns.FEATURES = {
         enabled = true,
         focusEnabled = false,
         warnSound = false,
+    },
+    damageMeter = {
+        enabled = false,
     },
     pvp = {
         enabled = false,

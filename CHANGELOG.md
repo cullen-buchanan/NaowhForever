@@ -2,6 +2,201 @@
 
 ## Unreleased
 
+## 1.1.11
+
+### Added
+- Settings: a Language setting, with French, Portuguese (Brazil), Spanish (Spain and Latin America),
+  Italian, Korean and Chinese (Simplified and Traditional) joining German and Russian.
+- Buff Thank You Message: Whisper Named Players, turn it off to answer every buff with the /thank
+  emote instead of a whisper.
+- Journeys: a pin you put on the map yourself plans the way to it (Journeys to Map Pins in the
+  Journeys settings).
+- QoL > Combat > Default Damage Meter: a Reskin switch that draws the game's own damage meter in
+  your theme, with a bar texture, font, outline, colors, sizes, title bar fade, scroll bar, buttons,
+  border and spell panel to set.
+- Default Damage Meter: Move and Resize, to drag the game's damage meter and resize it by its corner
+  without opening Edit Mode.
+- Default Damage Meter: the game's own Edit Mode settings for its damage meter (Bar Style, Numbers,
+  Window Width and Height, Bar Height, Bar Spacing, Window and Background Opacity, Text Size,
+  Visibility, Spec Icon, Class Color) set from the card, with Restore Game Settings.
+
+### Fixed
+- Journeys: the journey carries on through the Deeprun Tram instead of ending with "No way found".
+- Journeys: arriving at the last stop clears the pin.
+- Journeys: the card, the world map route and the pin follow you as you move.
+- Journeys: reaching a pin partway along a journey no longer ends the whole journey.
+- Professions: the Total Craft Timer bar disappears when you stop crafting instead of running on.
+- Town Pins: Alchemy, Blacksmithing, Tailoring, Engineering, Enchanting and Leatherworking trainers
+  now show on the map in every capital and starting town, not just Herbalism, Mining and the other
+  gathering trainers.
+- opening the character panel with the BiS List's look no longer errors.
+- Personal Buff Reminders: Weapon Imbue now shows the enchant you last cast (Windfury, Flametongue,
+  Frostbrand or Rockbiter), not always the same one.
+- sharing a profile now also carries which modules are on or off, so importing it on another
+  character matches.
+- Top Bar: the clock returns to its chosen colour after you move the mouse off it.
+- Tooltip copy shortcut: using Shift or Alt as the modifier no longer types the key into the copy
+  card.
+- Unlock Mode: modules that are switched off no longer show up to be moved.
+- Map Window: when EllesmereUI's Shifter is on, Shifter moves and scales the world map and Naowh
+  Forever leaves it alone.
+
+## 1.1.10
+
+### Added
+- QoL > Questing & Group: Always Free for All sets your party's loot to Free for All whenever you
+  lead it.
+- Journeys (Adventure > Journeys, off by default): every waypoint a module places can become a
+  journey over walking, the flights you know, your faction's boats and zeppelins, the Deeprun Tram,
+  the Darnassus portal, your Hearthstone and class teleports.
+- Journeys: walking follows the real terrain, with a compact Journey card for the steps and the
+  route drawn on the world map.
+- Journeys: tracking a far-away quest starts a journey to it, including quests the game gives no
+  marker for.
+- QoL > Questing & Group > On-Screen Buttons: Invite Buttons, a button per Battle.net friend or
+  character you keep, and an Invite All button.
+- Discovery: left-click a Rare Alert to target its rare.
+- Map Options and Pins drawer: Town Pin Size slider at the bottom.
+- QoL: a Map & Pins tab with Map Options and Map Pins, the home of every map option and map pin
+  setting.
+- Damage Meter: your group's damage, healing, absorbs, damage taken, interrupts, dispels and deaths
+  in your theme, in up to three windows, with fight history, a summary line and the fight time.
+- Damage Meter: hover a row for its spells and enemies, click it to drill in, report to chat or
+  reset from the menu or a key binding.
+- Damage Meter: choose a row's columns, texts, fonts and colors, and save looks by name to copy to
+  other windows or share as text.
+- Journeys: the route is drawn on the minimap too (Route on the Minimap in the Journeys settings).
+- Journeys: Learn Lifts as You Ride (off by default) notes the lifts you ride; /nf lifts lists them.
+- German: the whole addon now shows in German on German clients: settings, windows, tooltips, the
+  HUD Editor and the messages in your chat.
+- Top Bar: Clock Color, under Colors.
+- Journeys: walks take the Great Lift, the Freewind Post lift and the Thunder Bluff and Undercity
+  lifts.
+- Consumable Bar: Remove Empty in Edit Items takes off every item you have none of.
+
+### Changed
+- QoL > Questing & Group > On-Screen Buttons: the Invite Player row is replaced by Invite Buttons,
+  and the target Invite button can be turned off.
+- Professions: Disenchant Window: right-click keeps only that copy of an item; Shift-right-click
+  keeps every copy.
+- Map Pins: town pins are smaller on the world map.
+- Map: the map button's drawer holds the town pins only; every other pin and map option is on QoL >
+  Map & Pins.
+- Map: the windowed world map can always be resized from its corner and moved by its title bar; Map
+  Window is no longer a setting.
+- Map Pins: every pin size defaults to 20, and the same number gives every kind of pin the same
+  size; quest pins are smaller by default, about 56% of their old size.
+- Map Pins: pins are larger on the full screen map.
+- Map Pins: Skyborne Spots only shows for Skyborne characters, Stable Masters only for hunters.
+- QoL: a setting EllesmereUI also has no longer shows "EllesmereUI has it on"; turning one on while
+  it is on in both now asks you to turn one off.
+- Credits: the line under Ellesmere's name now thanks him for allowing us to add some of EUI's
+  styling and functionality.
+- Consumable Bar: Hide When Out is on by default and takes an item you have run out of off the bar,
+  so the bar closes up; it comes back in its place when you get more.
+- Consumable Bar: Scan Bags and Ask to Add leave Other Consumables out unless you switch them on in
+  the Scan Filters.
+- Waypoints: a waypoint placed while the world map is open now shows on the map at once instead of
+  after you close and reopen it.
+- Discovery: Quest List and Rares are now tabs of the Discovery window, next to Library Books and
+  Sleeping Bag; Shift-L and /nfquests open it on the Quest List tab.
+
+### Fixed
+- Consumable Bar: Ask to Add New Consumables and Scan Bags only offer scrolls that give a buff.
+- Performance: clarify that the Auto Push Spells to Bars recommendation stops automatic spell
+  pushes.
+- Map Pins: library book and Sleeping Bag pins no longer grow huge on the full screen map.
+- Always Free for All: no longer keeps asking for Free for All when the game turns it down.
+- Invite buttons: a Battle.net friend's alt on the other faction is no longer picked when
+  cross-faction parties are off.
+- Invite buttons: a button changed in combat invites the person it shows, not whoever took its place
+  in the list.
+- Journeys: walks to Marshal's Refuge, Morgan's Vigil and the Stormwind Harbor dock follow the
+  ground instead of a straight line.
+- Journeys: quests whose turn-in is in Stormwind, Mulgore, Redridge or the Eastern Plaguelands lead
+  to the right spot.
+- Instance Tracker: no more "attempt to compare a secret string value" errors when nameplates
+  appear.
+
+## 1.1.9
+
+### Changed
+- Dungeon Journal: boss loot updated from the latest Forever loot lists.
+- BiS List: picks updated from wowsrc.com's latest lists.
+
+### Fixed
+- BiS List: ten picks wowsrc lists were missing from the lists (wowsrc shows them blue, the game
+  green).
+
+## 1.1.8
+
+### Added
+- Dungeon Journal: City of Dalaran is open, with every boss's loot and drop chances.
+
+### Changed
+- Dungeon Journal: the old dungeons' group is called Low Level and sits at the top of the dungeon
+  list, closed until you open it.
+- Dungeon Journal: its data is updated to WoW Forever build 1.60.1.70338.
+- Dungeon Journal: boss loot updated from the latest Forever loot lists.
+- Dungeon Journal: drop chances updated from Wowhead's latest kill counts.
+- BiS List: picks updated from wowsrc.com's latest lists.
+- Dungeon Journal: City of Dalaran and Excavation Site read wowsrc.com's loot lists too.
+
+### Fixed
+- Dungeon Journal: an item placed on a boss twice is listed once (the Stockade's Defias Renegade
+  Ring).
+
+## 1.1.7
+
+### Added
+- AuraBuffs: personal buff reminders for every class (armor, Inner Fire, Battle Shout, poisons,
+  weapon imbues, shields, Thorns, Trueshot Aura, Hunter's Mark on elites), with a switch for each on
+  the Buffs & Consumables card. Warn With Minutes Left flags them before they run out.
+- Town Map: boat pins for the new Stormwind Harbor to Auberdine boat and the Steamwheedle Port to
+  Powderfuse Port (Riverglades) boat.
+- Town Map: zeppelin pins for the Dalaran and Mulgore zeppelins to Zephras Isle, and the island's
+  docks back.
+- Key binding: Open Training Planner, under Key Bindings > Naowh Forever.
+- QoL > Interface: Names Over Heads, switches for guild names, guild titles and player titles shown
+  with player names.
+- German: the options window, module names, tabs, buttons, search hints and gear slot names now show
+  in German on German clients.
+- Consumable Bar: Smart Buttons in Adding Items: NF Health, NF Mana, NF Bandage and NF Food from
+  Macros, and the Food & Drink buttons, each always using your best item.
+- Consumable Bar: Scan Bags and Ask to Add skip what a smart button already covers, and adding one
+  yourself asks first.
+- Settings: a card's on/off switch shows the Changed dot when it is off its default.
+- Settings that EllesmereUI also has (auto repair, sell junk, quick loot, skip cinematics and more)
+  now say whether EllesmereUI has them on, so you can keep only one running.
+
+### Changed
+- Macros: a Smart Macro the Consumable Bar uses stays on and shows Used by Consumable Bar.
+- Food & Drink Bar: steps aside while its buttons are on the Consumable Bar (its settings greyed),
+  and its key bindings work for them there too.
+- Consumable Bar and Food & Drink Bar: the keybind font starts on the addon font, and the Food &
+  Drink preview shows the keys you bound.
+- Consumable Bar: warriors and rogues get no drink button or NF Mana, no drinks or mana potions from
+  Scan Bags and Ask to Add, and adding one yourself asks first.
+- The Moderator badge is red.
+- The XP Bar hides in battlegrounds and arenas.
+
+### Fixed
+- Action Bars: importing a saved set no longer makes a second, outdated copy of each NF macro; your
+  own NF macros go on the bars.
+- Action Bars: Save on Logout no longer saves a set with no actions, which made importing it blank
+  your bars; it also never saves an alt's bars over a set the alt only imported.
+- Town Map: the Menethil Harbor and Auberdine boat now shows its Southshore stop, with a dock pin in
+  Hillsbrad Foothills.
+- Scrap Marker: works in Baganator's bags: marked items show the mark, Alt+click marks them, and
+  Baganator's junk can follow your scrap list.
+- On-Screen Buttons: Invite and Disband now start on the left edge of the screen instead of over the
+  action bars.
+- Auction Prices: the Scan Prices button is no longer hidden behind Auctionator's tabs; with
+  Auctionator loaded it sits after them.
+- The /nf badges help line no longer breaks into pieces in chat.
+- Professions: the window stays where you drag it when EllesmereUI's window mover is on, instead of
+  snapping back.
+
 ## 1.1.6
 
 ### Added

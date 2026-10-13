@@ -1,4 +1,4 @@
--- Bar.lua: the Consumable Bar on screen: one secure item button per entry, laid out, placed and shown or hidden out of combat.
+-- Bar.lua: the Consumable Bar on screen: one secure button per entry (an item or a Smart Macro), laid out, placed and shown or hidden out of combat.
 local ns = _G.NaowhForever
 
 local InCombatLockdown = InCombatLockdown
@@ -23,11 +23,12 @@ local RULE_COMBAT_HIDE = "[combat] hide; show"
 local RULE_COMBAT_SHOW = "[combat] show; hide"
 
 local frame, pending, wakeDue
+local syncedMacros = ""
 local buttons = {}
 local pool = {}
 local events
 
-local UpdateVisibility
+local UpdateVisibility, Apply
 
 local function Driver(f, rule)
     if f.visRule == rule then return end
@@ -48,6 +49,7 @@ local function ButtonFor(entry)
     if not button then
         button = CB.Decorate(ItemBar.SecureButton(frame, CB.ButtonName(entry)))
         button.tipOff = TipOff
+        button.emptyTip = CB.EmptyTip(entry)
         pool[entry] = button
     end
     return button
@@ -55,9 +57,26 @@ end
 
 local function Retire(button)
     Driver(button, nil)
-    ItemBar.SetItem(button, nil)
+    if CB.MacroInfo(button.entry) then
+        button:SetAttribute("type1", nil)
+        button:SetAttribute("macro1", nil)
+        button.itemID = nil
+    else
+        ItemBar.SetItem(button, nil)
+    end
     button.entry, button.spent, button.slot = nil, nil, nil
     button:Hide()
+end
+
+local function Point(button, entry)
+    local info = CB.MacroInfo(entry)
+    if info then
+        button:SetAttribute("type1", "macro")
+        button:SetAttribute("macro1", info.name)
+        button.itemID = CB.Resolve(entry)
+    else
+        ItemBar.SetItem(button, CB.Resolve(entry))
+    end
 end
 
 local function SavePosition(pos)
@@ -75,7 +94,7 @@ function CB.BarFrame()
 end
 
 local function Layout()
-    local items = CB.Items()
+    local items = CB.ShownItems()
     local size, gap, grow, perRow = CB.Grid()
     local inUse = {}
     for i = #buttons, 1, -1 do buttons[i] = nil end
@@ -86,7 +105,7 @@ local function Layout()
         CB.PlaceBackground(button, i, #items, gap, grow, perRow)
         CB.StyleCell(button, entry, size)
         button.entry, button.slot = entry, i
-        ItemBar.SetItem(button, CB.Resolve(entry))
+        Point(button, entry)
     end
     for _, button in pairs(pool) do
         if not inUse[button] and (button.entry ~= nil or button:IsShown()) then Retire(button) end
@@ -174,6 +193,56 @@ function UpdateVisibility()
     Wake(CB.TakeWake())
 end
 
+local function Has(test)
+    for _, entry in ipairs(CB.Items()) do
+        if test(entry) then return true end
+    end
+    return false
+end
+
+local function HasMacros()
+    return Has(CB.MacroInfo)
+end
+
+local function OutChanged()
+    if not S.Get("consumableBarHideEmpty") then return false end
+    for _, entry in ipairs(CB.Items()) do
+        local button = pool[entry]
+        if (button ~= nil and button.entry ~= nil) == CB.Out(entry) then return true end
+    end
+    return false
+end
+
+local function RefreshMacros()
+    local fight = InCombatLockdown()
+    for _, button in ipairs(buttons) do
+        if CB.MacroInfo(button.entry) then
+            button.itemID = CB.Resolve(button.entry)
+            if fight then
+                button.icon:SetTexture(CB.EntryIcon(button.entry))
+            else
+                CB.StyleCell(button, button.entry, CB.Grid())
+            end
+        end
+    end
+    UpdateCounts()
+    UpdateCooldowns()
+    UpdateVisibility()
+    QueueKeys()
+    CB.Changed()
+    if OutChanged() then Apply() end
+end
+
+local function SyncMacros()
+    local used = ""
+    for _, entry in ipairs(CB.SavedItems()) do
+        if CB.On() and CB.MacroInfo(entry) then used = used .. entry end
+    end
+    if used == syncedMacros then return end
+    syncedMacros = used
+    if ns.UpdateManagedMacros then ns.UpdateManagedMacros() end
+end
+
 local function AnyHideUsed()
     if CB.unlocked then return false end
     for _, entry in ipairs(CB.Items()) do
@@ -181,8 +250,6 @@ local function AnyHideUsed()
     end
     return false
 end
-
-local Apply
 
 local function OnEvent(_, event, unit, _, spellID)
     if event == "PLAYER_LOGIN" then
@@ -204,9 +271,12 @@ local function OnEvent(_, event, unit, _, spellID)
         UpdateVisibility()
     elseif event == "UNIT_AURA" or event == "UNIT_INVENTORY_CHANGED" then
         if unit == "player" then UpdateVisibility() end
+    elseif event == "UPDATE_MACROS" then
+        RefreshMacros()
     elseif event == "BAG_UPDATE_DELAYED" then
         UpdateCounts()
         UpdateCooldowns()
+        if OutChanged() then Apply() end
         CB.CheckNewItems()
         CB.Changed()
     else
@@ -216,6 +286,7 @@ end
 
 local function Listen(hideUsed)
     events:RegisterEvent("BAG_UPDATE_DELAYED")
+    if HasMacros() then events:RegisterEvent("UPDATE_MACROS") end
     events:RegisterEvent("PLAYER_ENTERING_WORLD")
     events:RegisterEvent("PLAYER_REGEN_ENABLED")
     if S.Get("consumableBarCooldown") or hideUsed then events:RegisterEvent("BAG_UPDATE_COOLDOWN") end
@@ -249,6 +320,7 @@ function Apply()
             Driver(frame, nil)
             frame:Hide()
         end
+        SyncMacros()
         return
     end
     if not frame then Build() end
@@ -261,6 +333,7 @@ function Apply()
     UpdateCooldowns()
     UpdateVisibility()
     QueueKeys()
+    SyncMacros()
 end
 
 local function Restyle()
