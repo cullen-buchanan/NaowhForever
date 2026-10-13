@@ -242,7 +242,7 @@ NaowhForever_QoL/
 - The line editor's box fills the scroll area down to its buttons and grows past it with the
   lines. `Parts.ShowBeside` sets its height once, so its bottom is tied to the options window's
   too, to follow a resize.
-- Gamble uses group chat for its announcements and join/leave words, and the addon-message
+- Gamble uses party or raid chat for its announcements and join/leave words, and the addon-message
   channel to keep Gamble windows in sync. Players and the host join or leave in group chat and use
   `/roll` when prompted. The addon tracks rolls and reports settlements; it never moves gold.
 - Classic rerolls only the tied highest or lowest players and the opposite extreme roller.

@@ -152,7 +152,6 @@ local env = setmetatable({
     Ambiguate = function(name, mode)
         return mode == "short" and (name:gsub("%-%w+$", "")) or name
     end,
-    IsInGuild = function() return true end,
     IsInRaid = function() return state.inRaid end,
     IsInGroup = function() return true end,
     GetTime = function() return 10 end,
@@ -228,15 +227,23 @@ check("pool, chat and announce controls are inset within the Gamble card",
         and state.editboxes[3].parent == state.controls and state.editboxes[3]:GetText() == "leave"
         and HasButton("Game mode: Classic") and not HasButton("Options")
         and not HasButton("Join") and not HasButton("Roll for Me"))
+Button("Party Chat"):Click()
+check("chat channel selection switches from Party to Raid",
+    S.Get("gambleChannel") == "RAID" and HasButton("Raid Chat"))
+Button("Raid Chat"):Click()
+check("chat channel selection cycles from Raid back to Party",
+    S.Get("gambleChannel") == "PARTY" and HasButton("Party Chat"))
 state.inRaid = true
 local addonCount = #state.addons
 Button("New Game"):Click()
 check("Party chat is not offered as a partial-raid channel",
     #state.addons == addonCount and state.prints[#state.prints]:find("party or raid", 1, true) ~= nil)
 state.inRaid = false
+S.Set("gambleChannel", "UNSUPPORTED")
 Button("New Game"):Click()
 check("a new Classic session is announced in the selected channel",
-    Chat("Classic, pool 200", "PARTY") and state.addons[#state.addons][2]:match("^O|"))
+    S.Get("gambleChannel") == "PARTY" and Chat("Classic, pool 200", "PARTY")
+        and state.addons[#state.addons][2]:match("^O|"))
 check("the new-game announcement explains how to leave",
     Chat('Say "join" to join or "leave" to leave; use /roll when it\'s your turn.', "PARTY"))
 check("the session announcement includes its join and leave words",
