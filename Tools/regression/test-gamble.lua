@@ -43,11 +43,13 @@ function widgetMethods:SetPoint(...)
     points[#points + 1] = { ... }
     rawset(self, "anchorPoints", points)
 end
+function widgetMethods:SetScrollChild(child) self.scrollChild = child end
 function widgetMethods:SetSize(width, height)
     rawset(self, "width", width)
     rawset(self, "height", height)
 end
 function widgetMethods:SetHeight() end
+function widgetMethods:GetStringHeight() return 600 end
 function widgetMethods:SetNumeric() end
 function widgetMethods:SetScale() end
 function widgetMethods:SetJustifyH() end
@@ -77,6 +79,7 @@ end
 function parts.TitleBar(_, _, _, _, onClose)
     local close = widget()
     close.text = "X"
+    close:SetPoint("RIGHT", state.window, "TOPRIGHT", -8, 0)
     close.onClick = function() state.window:Hide(); if onClose then onClose() end end
     state.buttons[#state.buttons + 1] = close
     return close
@@ -105,6 +108,7 @@ function ns.Font(parent)
     local font = widget()
     font.parent = parent
     if parent == state.controls and not state.poolLabel then state.poolLabel = font end
+    if state.helpContent == parent then state.helpText = font end
     if parent == state.window then
         if not state.status then state.status = font else state.roster = font end
     end
@@ -128,6 +132,12 @@ function ns.SetButtonText(button, text) button.text = text end
 function ns.AccentBorder(button) return button end
 function ns.UIScale() return 1 end
 function ns.Print(text) state.prints[#state.prints + 1] = text end
+function ns.UI.SlimScroll(parent)
+    local scroll = widget()
+    scroll.parent = parent
+    state.helpScroll = scroll
+    return scroll
+end
 
 local env = setmetatable({
     _G = { NaowhForever = ns },
@@ -144,7 +154,10 @@ local env = setmetatable({
         local frame = widget()
         frame.parent = parent
         state.frames[#state.frames + 1] = frame
-        if parent == state.window then state.controls = frame end
+        if parent == state.window then
+            if not state.controls then state.controls = frame else state.helpView = frame end
+        end
+        if parent == state.helpScroll then state.helpContent = frame end
         return frame
     end,
     UnitName = function() return "Host" end,
@@ -164,6 +177,12 @@ env._G.NaowhForever = ns
 env._G.RandomRoll = env.RandomRoll
 env._G.RANDOM_ROLL_RESULT = env.RANDOM_ROLL_RESULT
 env._G.YOU_ROLL_RESULT = env.YOU_ROLL_RESULT
+local helpFile = assert(io.open("NaowhForever_QoL/Gambling/GambleHelp.lua", "rb"))
+local helpSource = helpFile:read("*a"):gsub("\r\n", "\n")
+helpFile:close()
+local helpChunk = assert(loadstring(helpSource, "GambleHelp.lua"))
+setfenv(helpChunk, env)
+helpChunk()
 local file = assert(io.open("NaowhForever_QoL/Gambling/Gamble.lua", "rb"))
 local source = file:read("*a"):gsub("\r\n", "\n")
 file:close()
@@ -204,6 +223,22 @@ check("off by default, Gamble builds no frames", #state.frames == 0 and #state.p
 S.Set("gamble", true)
 ns.ToggleGamble()
 check("opening registers the session listeners", state.window:IsShown() and state.events.events.CHAT_MSG_SYSTEM)
+local helpButton = Button("How to play")
+local helpAnchor = rawget(helpButton, "anchorPoints")[1]
+check("How to play is positioned next to the window close button",
+    helpAnchor[1] == "RIGHT" and helpAnchor[2] == Button("X") and helpAnchor[3] == "LEFT")
+check("the how-to-play text is loaded from its separate Gambling file",
+    type(ns.GambleHelpText) == "string" and ns.GambleHelpText:find("CLASSIC", 1, true)
+        and ns.GambleHelpText:find("DEATHROLL", 1, true)
+        and ns.GambleHelpText:find("Cancel Session", 1, true))
+helpButton:Click()
+check("How to play replaces the game controls with the scrollable guide",
+    state.helpView:IsShown() and not state.controls:IsShown()
+        and state.helpText and state.helpText.text == ns.GambleHelpText
+        and Button("Back to game").text == "Back to game")
+Button("Back to game"):Click()
+check("the guide can return to the game controls",
+    not state.helpView:IsShown() and state.controls:IsShown() and HasButton("How to play"))
 check("pool, chat and announce controls are inset within the Gamble card",
     state.controls and state.controls.parent == state.window
         and rawget(state.controls, "anchorPoints")[1][4] >= ns.Shared.Style.WINDOW_PAD + 8

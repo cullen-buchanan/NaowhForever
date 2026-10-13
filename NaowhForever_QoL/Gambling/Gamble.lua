@@ -30,6 +30,7 @@ local CHANNEL_W, CHANNEL_H = 118, 28
 local ANNOUNCE_W = 120
 local BUTTON_W, BUTTON_H, BUTTON_GAP = 112, 28, 8
 local FIELD_INSET = 8
+local HELP_TEXT_HEIGHT = 1000
 
 -- Bounds keep session values and pipe-delimited addon payloads within safe sizes.
 local MAX_POOL, MAX_WORD = 100000000, 24
@@ -96,9 +97,9 @@ local TEXT_COMM_FAILED = "Gamble could not register its group message prefix."
 local TEXT_NOT_ACTIVE = "Turn on Gamble under QoL > Questing & Group first."
 
 -- Lazily-created main-window widgets; nil until Gamble is first opened.
-local window, controls, poolBox, channelButton, announceButton, status, roster
+local window, controls, poolBox, channelButton, announceButton, status, roster, helpView
 local joinBox, leaveBox, modeButton
-local lastCallButton, startButton, cancelButton
+local newButton, lastCallButton, startButton, cancelButton, helpButton
 
 -- The single event frame is created on demand; the prefix only needs registering once.
 local events, prefixRegistered
@@ -941,6 +942,28 @@ local function SavePool()
     poolBox:ClearFocus()
 end
 
+--- Switch between the main controls and the scrollable how-to-play guide.
+-- @local
+-- @param show True to display the guide, false to show the game controls.
+local function ShowHelp(show)
+    if not helpView then return end
+    if show then helpView:Show() else helpView:Hide() end
+    if show then controls:Hide() else controls:Show() end
+    if show then status:Hide() else status:Show() end
+    if show then roster:Hide() else roster:Show() end
+    if show then newButton:Hide() else newButton:Show() end
+    if show then lastCallButton:Hide() else lastCallButton:Show() end
+    if show then startButton:Hide() else startButton:Show() end
+    if show then cancelButton:Hide() else cancelButton:Show() end
+    ns.SetButtonText(helpButton, show and "Back to game" or "How to play")
+end
+
+--- Toggle the guide view without closing the Gamble window.
+-- @local
+local function ToggleHelp()
+    ShowHelp(not helpView:IsShown())
+end
+
 --- Create the inline pool, channel, join/leave, and mode controls.
 -- @local
 local function CreateControls()
@@ -994,11 +1017,34 @@ end
 --- Build the main Gamble window, its controls, and its event hooks.
 -- @local
 local function CreateWindow()
+    assert(type(ns.GambleHelpText) == "string", "Gamble help text was not loaded")
     window = Parts.Window(WINDOW_W, WINDOW_H, "gambleWindow")
     window.backdrop:Card(PAD, HEADER + PAD, PAD, FOOTER + PAD)
-    Parts.TitleBar(window, TITLE, SUBTITLE, PAGE)
+    local closeButton = Parts.TitleBar(window, TITLE, SUBTITLE, PAGE)
+    helpButton = ns.Button(window, "How to play", 104, BUTTON_H, ToggleHelp)
+    helpButton:SetPoint("RIGHT", closeButton, "LEFT", -ROW_GAP, 0)
     Parts.FooterBrand(window, PAGE)
     CreateControls()
+
+    helpView = CreateFrame("Frame", nil, window)
+    helpView:SetPoint("TOPLEFT", window, "TOPLEFT", INSET, -(HEADER + INSET))
+    helpView:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -INSET, FOOTER + INSET)
+    local helpScroll = ns.UI.SlimScroll(helpView)
+    helpScroll:SetPoint("TOPLEFT")
+    helpScroll:SetPoint("BOTTOMRIGHT", -8, 0)
+    local helpContent = CreateFrame("Frame", nil, helpScroll)
+    helpContent:SetSize(WINDOW_W - INSET * 2 - 32, 1)
+    helpScroll:SetScrollChild(helpContent)
+    local helpText = ns.Font(helpContent, 13, nil, T.fg)
+    helpText:SetPoint("TOPLEFT", helpContent, "TOPLEFT", 0, 0)
+    helpText:SetWidth(WINDOW_W - INSET * 2 - 32)
+    helpText:SetJustifyH("LEFT")
+    helpText:SetJustifyV("TOP")
+    helpText:SetWordWrap(true)
+    helpText:SetText(ns.GambleHelpText)
+    local textHeight = helpText:GetStringHeight()
+    helpContent:SetHeight(textHeight > 0 and textHeight or HELP_TEXT_HEIGHT)
+    helpView:Hide()
 
     status = ns.Font(window, 13, "OUTLINE", T.accent)
     status:SetPoint("TOPLEFT", INSET, -(HEADER + INSET + CONTROLS_H + ROW_GAP))
@@ -1009,7 +1055,7 @@ local function CreateWindow()
     roster:SetJustifyH("LEFT")
     roster:SetJustifyV("TOP")
 
-    local newButton = ns.Button(window, TEXT_NEW, BUTTON_W, BUTTON_H, NewGame)
+    newButton = ns.Button(window, TEXT_NEW, BUTTON_W, BUTTON_H, NewGame)
     lastCallButton = ns.Button(window, TEXT_LAST_CALL, BUTTON_W, BUTTON_H, LastCall)
     startButton = ns.AccentBorder(ns.Button(window, TEXT_START, BUTTON_W, BUTTON_H, StartRolling))
     cancelButton = ns.Button(window, TEXT_CANCEL, BUTTON_W, BUTTON_H, CancelSession)
