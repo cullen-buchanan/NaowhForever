@@ -1,7 +1,4 @@
---- Group chat-based gambling sessions with Classic rolls and Deathroll.
--- The host tracks the roster and roll results, synchronizes session state with
--- addon messages, and announces settlements without transferring gold.
--- @script Gamble
+-- Gamble.lua: group gambling sessions with Classic rolls and Deathroll.
 local ns = _G.NaowhForever
 
 local Ambiguate, IsInGroup, IsInRaid = Ambiguate, IsInGroup, IsInRaid
@@ -16,11 +13,9 @@ local S = ns.QoLSettings
 local T = ns.THEME
 local Parts, St = ns.Shared.Parts, ns.Shared.Style
 
--- Addon-message identity and the QoL settings page that owns this feature.
 local PREFIX = "NaowhGamble"
 local PAGE = "QoL/Questing & Group"
 
--- Window and widget dimensions are shared by the main frame and its controls.
 local WINDOW_W, WINDOW_H = 520, 470
 local PAD, HEADER, FOOTER = St.WINDOW_PAD, St.WINDOW_HEADER, St.WINDOW_FOOTER
 local INSET, ROW_GAP = St.CONTENT_INSET, 10
@@ -33,24 +28,15 @@ local FIELD_INSET = 8
 local HELP_TEXT_HEIGHT = 1000
 local SILVER_PER_GOLD = 100
 
--- Bounds keep silver-denominated pool values and payloads within safe sizes.
 local MAX_POOL, MAX_WORD = 100000000 * SILVER_PER_GOLD, 24
 local MAX_PARTICIPANTS, MAX_PLAYER_NAME, MAX_ROSTER_CHUNK = 40, 48, 150
 
---- Convert a nonnegative total silver amount to canonical gold/silver text.
--- @local
--- @param amount Total silver, as a whole number.
--- @return Amount formatted as "NgNNs".
 local function FormatPool(amount)
     local gold = floor(amount / SILVER_PER_GOLD)
     local silver = amount % SILVER_PER_GOLD
     return ("%dg%02ds"):format(gold, silver)
 end
 
---- Parse a pool string and return its value in total silver.
--- @local
--- @param text Pool formatted as integer gold followed by integer silver.
--- @return Positive total silver within the configured limit, or nil.
 local function ParsePool(text)
     if type(text) ~= "string" then return nil end
     local goldText, silverText = lower(trim(text)):match("^(%d+)g(%d+)s$")
@@ -63,10 +49,6 @@ local function ParsePool(text)
     return amount
 end
 
---- Convert a legacy numeric pool setting, which was stored in gold.
--- @local
--- @param value Stored pool setting.
--- @return Canonical gold/silver text or the original text for validation.
 local function PoolSettingText(value)
     if type(value) == "number" and value >= 1 and value == floor(value)
         and value <= floor(MAX_POOL / SILVER_PER_GOLD) then
@@ -75,34 +57,21 @@ local function PoolSettingText(value)
     return tostring(value or "200g00s")
 end
 
---- Map registered chat events to the channel used by Gamble.
--- @table CHAT_EVENTS
--- @field CHAT_MSG_PARTY PARTY and party-leader messages.
--- @field CHAT_MSG_RAID RAID and raid-leader messages.
 local CHAT_EVENTS = {
     CHAT_MSG_PARTY = "PARTY", CHAT_MSG_PARTY_LEADER = "PARTY",
     CHAT_MSG_RAID = "RAID", CHAT_MSG_RAID_LEADER = "RAID",
 }
 
---- Channels available for session announcements and addon messages.
--- @table CHANNELS
 local CHANNELS = { "PARTY", "RAID" }
 
---- Human-readable labels for WoW chat channel identifiers and game modes.
--- @table CHANNEL_LABEL
 local CHANNEL_LABEL = { PARTY = "Party", RAID = "Raid" }
---- Human-readable labels for the supported game mode identifiers.
--- @table MODE_LABEL
 local MODE_LABEL = { classic = "Classic", deathroll = "Deathroll" }
 
---- Lua pattern escapes used to match WoW's localized roll text literally.
--- @table PATTERN_ESCAPE
 local PATTERN_ESCAPE = {
     ["%"] = "%%", ["^"] = "%^", ["$"] = "%$", ["("] = "%(", [")"] = "%)",
     ["."] = "%.", ["["] = "%[", ["]"] = "%]", ["*"] = "%*", ["+"] = "%+",
     ["-"] = "%-", ["?"] = "%?",
 }
--- Window labels and user-facing chat or validation messages.
 local TITLE, SUBTITLE = "Gamble", "Classic and Deathroll"
 local TEXT_POOL = "Pool (g/s)"
 local TEXT_CHANNEL = "%s Chat"
@@ -136,33 +105,20 @@ local TEXT_LEAVE_WORD = "Leave word"
 local TEXT_COMM_FAILED = "Gamble could not register its group message prefix."
 local TEXT_NOT_ACTIVE = "Turn on Gamble under QoL > Questing & Group first."
 
--- Lazily-created main-window widgets; nil until Gamble is first opened.
 local window, controls, poolBox, channelButton, announceButton, status, roster, helpView
 local joinBox, leaveBox, modeButton
 local newButton, lastCallButton, startButton, cancelButton, helpButton
 
--- The single event frame is created on demand; the prefix only needs registering once.
 local events, prefixRegistered
 local OnEvent
 
--- Active local or discovered session. It tracks the host, lobby, and phase;
--- `round` stores eligible players, rolls seen, and the current roll maximum;
--- `duel` stores the two Deathroll opponents, next roller, and pot.
 local game
 
---- Normalize a player name for case-insensitive lookup.
--- @local
--- @param name Player name, optionally including a realm.
--- @return Lowercase normalized key, or nil for an invalid name.
 local function PlayerKey(name)
     if type(name) ~= "string" or name == "" then return nil end
     return lower(Ambiguate(name, "none"))
 end
 
---- Format player names as a readable list.
--- @local
--- @param players Array of player names or player records.
--- @return Names joined with commas and a final "and".
 local function Names(players)
     local names = {}
     for i, player in ipairs(players) do
@@ -172,25 +128,14 @@ local function Names(players)
     return concat(names, ", ", 1, #names - 1) .. " and " .. names[#names]
 end
 
---- Get the local player's full name when available.
--- @local
--- @return Full character name, short name, or a safe fallback.
 local function PlayerName()
     return UnitFullName("player") or UnitName("player") or "Player"
 end
 
---- Report whether Gamble is enabled both globally and in QoL settings.
--- @local
--- @return True when Gamble is active.
 local function IsOn()
     return S.Get("enabled") and S.Get("gamble")
 end
 
---- Validate configured chat words and their addon-payload constraints.
--- @local
--- @param joinWord Word players say to join a lobby.
--- @param leaveWord Word players say to leave a lobby.
--- @return True when both are distinct, single, bounded words without "|".
 local function ValidWords(joinWord, leaveWord)
     return type(joinWord) == "string" and type(leaveWord) == "string"
         and joinWord:match("^%S+$") and leaveWord:match("^%S+$")
@@ -199,20 +144,11 @@ local function ValidWords(joinWord, leaveWord)
         and lower(joinWord) ~= lower(leaveWord)
 end
 
---- Check that the player can use the selected group-chat channel.
--- @local
--- @param channel WoW channel identifier.
--- @return True when the player is in the required party or raid.
 local function ChannelAvailable(channel)
     if channel == "RAID" then return IsInRaid() end
     return channel == "PARTY" and IsInGroup() and not IsInRaid()
 end
 
---- Send a public session message after verifying the channel is available.
--- @local
--- @param text Message to send.
--- @param channel WoW channel identifier.
--- @return True if sent; otherwise print the appropriate group requirement.
 local function SendChat(text, channel)
     if not ChannelAvailable(channel) then
         ns.Print(TEXT_NEED_GROUP)
@@ -222,26 +158,16 @@ local function SendChat(text, channel)
     return true
 end
 
---- Send a session synchronization message to an available channel.
--- @local
--- @param text Encoded Gamble protocol message.
--- @param channel WoW channel identifier.
--- @return True if sent, false if the channel is unavailable.
 local function SendAddon(text, channel)
     if not ChannelAvailable(channel) then return false end
     SendAddonMessage(PREFIX, text, channel)
     return true
 end
 
---- Decide whether Gamble needs to listen for chat and roll events.
--- @local
--- @return True while the window is open or a session is still active.
 local function NeedEvents()
     return IsOn() and ((window and window:IsShown()) or (game and game.phase ~= "complete"))
 end
 
---- Register or unregister the events required by the current feature state.
--- @local
 local function UpdateListening()
     local listen = NeedEvents()
     if not listen then
@@ -266,35 +192,22 @@ local function UpdateListening()
     for event in pairs(CHAT_EVENTS) do events:RegisterEvent(event) end
 end
 
---- Send one addon message over every channel currently available to the player.
--- @local
--- @param text Encoded Gamble protocol message.
 local function SendAddonToAvailable(text)
     for _, channel in ipairs(CHANNELS) do
         if ChannelAvailable(channel) then SendAddon(text, channel) end
     end
 end
 
---- Ask nearby Gamble hosts to resend any active session state.
--- @local
 local function RequestOpenSessions()
     SendAddonToAvailable("Q")
 end
 
---- Look up a session participant by normalized player name.
--- @local
--- @param name Player name, optionally including a realm.
--- @return Participant record or nil if the player is not in this session.
 local function FindPlayer(name)
     local key = PlayerKey(name)
     if not key or not game then return nil end
     return game.players[key]
 end
 
---- Add a unique participant while respecting the session roster limit.
--- @local
--- @param name Player name to add.
--- @return True if added; false if invalid, duplicate, or over capacity.
 local function AddPlayer(name)
     local key = PlayerKey(name)
     if not (key and game and not game.players[key]) then return false end
@@ -305,10 +218,6 @@ local function AddPlayer(name)
     return true
 end
 
---- Remove a participant from both the roster array and name lookup.
--- @local
--- @param name Player name to remove.
--- @return True if removed, false if the player was not in the session.
 local function RemovePlayer(name)
     local player = FindPlayer(name)
     if not player then return false end
@@ -322,10 +231,6 @@ local function RemovePlayer(name)
     return true
 end
 
---- Decode a comma-separated roster chunk into validated participant records.
--- @local
--- @param encoded Comma-separated player names.
--- @return Player records, or nil if the names are invalid or over the limits.
 local function DecodePlayers(encoded)
     local players = {}
     if type(encoded) ~= "string" or #encoded > MAX_PARTICIPANTS * (MAX_PLAYER_NAME + 1) then return nil end
@@ -340,18 +245,12 @@ local function DecodePlayers(encoded)
     return players
 end
 
---- Build a name-keyed lookup table from an ordered player list.
--- @local
--- @param players Array of participant records.
--- @return Map from normalized player key to participant record.
 local function RosterMap(players)
     local out = {}
     for _, player in ipairs(players) do out[player.key] = player end
     return out
 end
 
---- Refresh the visible session status, roster, and control availability.
--- @local
 local function UpdateDisplay()
     if not (window and window:IsShown()) then return end
     local phaseText = game and game.phase or "No session"
@@ -387,20 +286,11 @@ local function UpdateDisplay()
     poolBox:SetEnabled(not (game and game.phase ~= "complete"))
 end
 
---- Encode a protocol message with the active session identifier.
--- Message kinds are O=open, R=roster, C=classic round, M=duel, T=turn,
--- D=settlement, X=close, and Q=request state.
--- @local
--- @param kind Single-character protocol message kind.
--- @param ... Message-specific fields, serialized with "|" separators.
--- @return Encoded message, or just the kind when there is no active session.
 local function AddonPayload(kind, ...)
     if not game then return kind end
     return kind .. "|" .. game.id .. "|" .. concat({ ... }, "|")
 end
 
---- Broadcast the host's current participant roster in bounded-size chunks.
--- @local
 local function BroadcastRoster()
     if not (game and game.isHost) then return end
     if #game.participants == 0 then return end
@@ -422,8 +312,6 @@ local function BroadcastRoster()
     end
 end
 
---- Broadcast the players eligible for the current Classic round.
--- @local
 local function BroadcastRound()
     if not (game and game.isHost and game.round) then return end
     game.roundVersion = (game.roundVersion or 0) + 1
@@ -444,16 +332,6 @@ local function BroadcastRound()
     end
 end
 
---- Collect ordered roster chunks and decode them once a full version arrives.
--- Older or incomplete message sets are ignored so stale state cannot replace
--- a newer roster or round.
--- @local
--- @param kind Assembly key, distinguishing roster and round chunks.
--- @param version Monotonically increasing sequence number.
--- @param index One-based index of this chunk.
--- @param count Total number of chunks in this sequence.
--- @param encoded Comma-separated player names in this chunk.
--- @return Decoded participants when the sequence is complete, otherwise nil.
 local function AssemblePlayers(kind, version, index, count, encoded)
     version, index, count = tonumber(version), tonumber(index), tonumber(count)
     if not (version and index and count and version >= 0 and index >= 1
@@ -477,17 +355,11 @@ local function AssemblePlayers(kind, version, index, count, encoded)
     return DecodePlayers(concat(assembly.chunks, ","))
 end
 
---- Announce a new session and its settings to other addon users.
--- @local
 local function BroadcastOpen()
     if not (game and game.isHost) then return end
     SendAddon(AddonPayload("O", game.pool, game.mode, game.joinWord, game.leaveWord, PlayerName()), game.channel)
 end
 
---- Begin a Classic round with the supplied players and maximum roll value.
--- @local
--- @param players Participants expected to roll in this round.
--- @param max Upper bound for each /roll.
 local function SetClassicRound(players, max)
     local expected = RosterMap(players)
     game.phase = "rolling"
@@ -499,10 +371,6 @@ local function SetClassicRound(players, max)
     UpdateDisplay()
 end
 
---- Set the active Deathroll turn and tell clients who must roll next.
--- @local
--- @param player Participant who owns the current turn.
--- @param max Upper bound for the current /roll.
 local function SetDeathrollTurn(player, max)
     game.phase = "deathroll"
     game.round = { expected = { [player.key] = player }, rolls = {}, players = { player }, max = max }
@@ -513,8 +381,6 @@ local function SetDeathrollTurn(player, max)
     UpdateDisplay()
 end
 
---- Choose two distinct participants and start their Deathroll duel.
--- @local
 local function StartDeathroll()
     local players = game.participants
     local firstIndex, secondIndex = random(#players), random(#players - 1)
@@ -528,8 +394,6 @@ local function StartDeathroll()
     SetDeathrollTurn(starter, game.pool)
 end
 
---- Start the selected game mode after validating host and lobby state.
--- @local
 local function StartRolling()
     if not game then ns.Print(TEXT_NO_GAME); return end
     if not game.isHost then ns.Print(TEXT_NOT_HOST); return end
@@ -546,8 +410,6 @@ local function StartRolling()
     end
 end
 
---- Resolve a completed Classic round, rerolling ties before settlement.
--- @local
 local function ClassicResult()
     local round = game.round
     local high, low, highs, lows
@@ -582,10 +444,6 @@ local function ClassicResult()
     UpdateDisplay()
 end
 
---- Resolve a Deathroll result or pass the turn to the other duelist.
--- @local
--- @param player Participant who just rolled.
--- @param value Their roll result.
 local function DeathrollResult(player, value)
     local duel = game.duel
     if not duel then return end
@@ -603,12 +461,6 @@ local function DeathrollResult(player, value)
     SetDeathrollTurn(nextPlayer, value)
 end
 
---- Record a valid roll and let the host resolve a finished round.
--- @local
--- @param name Rolling player's name.
--- @param value Roll result.
--- @param minimum Lower bound reported by the game.
--- @param maximum Upper bound reported by the game.
 local function OnRoll(name, value, minimum, maximum)
     local key = PlayerKey(name)
     if not (key and game and game.round and game.round.expected[key]) then return end
@@ -628,13 +480,6 @@ local function OnRoll(name, value, minimum, maximum)
     end
 end
 
---- Convert a localized WoW roll-result format string into a Lua pattern.
--- Percent-s and percent-d placeholders become captures; all other pattern
--- characters are escaped so localized punctuation is matched literally.
--- @local
--- @param format Format string supplied by the WoW client.
--- @param expectedCaptures Number of captures required for this result format.
--- @return Anchored Lua pattern, or nil when the format is unsupported.
 local function CompileRollPattern(format, expectedCaptures)
     if type(format) ~= "string" then return nil end
     local pattern, captures, index = { "^" }, 0, 1
@@ -660,13 +505,9 @@ local function CompileRollPattern(format, expectedCaptures)
     return concat(pattern)
 end
 
--- WoW supplies localized message templates; compile them once for roll parsing.
 local ROLL_PATTERN = CompileRollPattern(_G.RANDOM_ROLL_RESULT)
 local SELF_ROLL_PATTERN = CompileRollPattern(_G.YOU_ROLL_RESULT, 3)
 
---- Parse a localized system message and forward any roll result.
--- @local
--- @param message System chat text generated by /roll.
 local function OnSystemMessage(message)
     if not (ROLL_PATTERN and game and game.round) then return end
     local name, value, minimum, maximum = tostring(message):match(ROLL_PATTERN)
@@ -680,12 +521,6 @@ local function OnSystemMessage(message)
     OnRoll(name, tonumber(value), tonumber(minimum), tonumber(maximum))
 end
 
---- Handle configured join and leave words in the active lobby channel.
--- Only the host changes the roster; resulting updates are broadcast to clients.
--- @local
--- @param event WoW chat event name.
--- @param message Chat message text.
--- @param sender Character who sent the message.
 local function OnChannelMessage(event, message, sender)
     if not (game and game.isHost and game.phase == "lobby"
         and CHAT_EVENTS[event] == game.channel and type(sender) == "string") then return end
@@ -703,16 +538,6 @@ local function OnChannelMessage(event, message, sender)
     end
 end
 
---- Validate an open-session message and create a client-side lobby.
--- @local
--- @param sender Addon-message sender and host identity.
--- @param channel Channel on which the session was announced.
--- @param id Unique session identifier.
--- @param pool Initial stake in total silver.
--- @param mode Game mode identifier.
--- @param joinWord Configured lobby join word.
--- @param leaveWord Configured lobby leave word.
--- @param ownerName Host's display name.
 local function OpenPayload(sender, channel, id, pool, mode, joinWord, leaveWord, ownerName)
     local amount = tonumber(pool)
     if not (amount and amount >= 1 and amount <= MAX_POOL and amount == floor(amount)
@@ -728,14 +553,6 @@ local function OpenPayload(sender, channel, id, pool, mode, joinWord, leaveWord,
     UpdateDisplay()
 end
 
---- Process Gamble protocol messages and synchronize the local session state.
--- The host is authoritative for roster, round, turn, settlement, and close
--- messages; each message is validated before it updates the local game record.
--- @local
--- @param prefix Addon-message prefix.
--- @param message Encoded Gamble protocol message.
--- @param channel WoW channel used for the message.
--- @param sender Addon-message sender.
 local function OnAddonMessage(prefix, message, channel, sender)
     if prefix ~= PREFIX or type(message) ~= "string" or type(sender) ~= "string" then return end
     local key = PlayerKey(sender)
@@ -828,10 +645,6 @@ local function OnAddonMessage(prefix, message, channel, sender)
     end
 end
 
---- Dispatch registered chat, system-roll, and addon-message events.
--- @param _ Frame receiving the event.
--- @param event WoW event name.
--- @param ... Event-specific arguments.
 function OnEvent(_, event, ...)
     if event == "CHAT_MSG_SYSTEM" then
         OnSystemMessage(...)
@@ -842,9 +655,6 @@ function OnEvent(_, event, ...)
     end
 end
 
---- Parse the gold/silver pool as total silver and persist its canonical form.
--- @local
--- @return Positive total silver, or nil after displaying an error.
 local function GetPool()
     local amount = ParsePool(poolBox:GetText() or "")
     if not amount then
@@ -855,8 +665,6 @@ local function GetPool()
     return amount
 end
 
---- Validate settings and open a new host-owned session.
--- @local
 local function NewGame()
     if not IsOn() then ns.Print(TEXT_NOT_ACTIVE); return end
     if game and game.phase ~= "complete" and not game.isHost then
@@ -901,15 +709,11 @@ local function NewGame()
     UpdateDisplay()
 end
 
---- Remind players how to join before the lobby starts.
--- @local
 local function LastCall()
     if not (game and game.isHost and game.phase == "lobby") then ns.Print(TEXT_NOT_LOBBY); return end
     SendChat(TEXT_LAST:format(game.joinWord, CHANNEL_LABEL[game.channel]), game.channel)
 end
 
---- Cancel the active session and notify its participants.
--- @local
 local function CancelSession()
     if not game or game.phase == "complete" then ns.Print(TEXT_NO_GAME); return end
     if not game.isHost then ns.Print(TEXT_NOT_HOST); return end
@@ -921,8 +725,6 @@ local function CancelSession()
     UpdateDisplay()
 end
 
---- Announce who still needs to roll, or the active Deathroll turn and limit.
--- @local
 local function AnnounceRolls()
     if not (game and game.isHost and game.round) then return end
     if game.phase == "deathroll" then
@@ -940,8 +742,6 @@ local function AnnounceRolls()
     SendChat(message, game.channel)
 end
 
---- Cycle the configured announcement channel through supported choices.
--- @local
 local function CycleChannel()
     local current = S.Get("gambleChannel") or "PARTY"
     local nextIndex = 1
@@ -952,8 +752,6 @@ local function CycleChannel()
     ns.SetButtonText(channelButton, TEXT_CHANNEL:format(CHANNEL_LABEL[CHANNELS[nextIndex]]))
 end
 
---- Validate and persist the join and leave words from the settings fields.
--- @local
 local function SaveWords()
     local joinWord = trim(joinBox:GetText() or "")
     local leaveWord = trim(leaveBox:GetText() or "")
@@ -967,24 +765,17 @@ local function SaveWords()
     leaveBox:SetText(leaveWord)
 end
 
---- Toggle the configured game mode between Classic and Deathroll.
--- @local
 local function ToggleMode()
     S.Set("gambleMode", S.Get("gambleMode") == "deathroll" and "classic" or "deathroll")
     ns.SetButtonText(modeButton, TEXT_MODE:format(MODE_LABEL[S.Get("gambleMode")]))
 end
 
---- Persist a valid pool value after the edit box loses focus or is submitted.
--- @local
 local function SavePool()
     if not poolBox then return end
     GetPool()
     poolBox:ClearFocus()
 end
 
---- Switch between the main controls and the scrollable how-to-play guide.
--- @local
--- @param show True to display the guide, false to show the game controls.
 local function ShowHelp(show)
     if not helpView then return end
     if show then helpView:Show() else helpView:Hide() end
@@ -998,14 +789,10 @@ local function ShowHelp(show)
     ns.SetButtonText(helpButton, show and "Back to game" or "How to play")
 end
 
---- Toggle the guide view without closing the Gamble window.
--- @local
 local function ToggleHelp()
     ShowHelp(not helpView:IsShown())
 end
 
---- Create the inline pool, channel, join/leave, and mode controls.
--- @local
 local function CreateControls()
     controls = CreateFrame("Frame", nil, window)
     controls:SetPoint("TOPLEFT", window, "TOPLEFT", INSET, -(HEADER + INSET + ROW_GAP))
@@ -1053,8 +840,6 @@ local function CreateControls()
     ns.SetButtonText(modeButton, TEXT_MODE:format(MODE_LABEL[S.Get("gambleMode")] or MODE_LABEL.classic))
 end
 
---- Build the main Gamble window, its controls, and its event hooks.
--- @local
 local function CreateWindow()
     assert(type(ns.GambleHelpText) == "string", "Gamble help text was not loaded")
     window = Parts.Window(WINDOW_W, WINDOW_H, "gambleWindow")
@@ -1114,7 +899,6 @@ local function CreateWindow()
     UpdateDisplay()
 end
 
---- Toggle the Gamble window, lazily creating it on first use.
 function ns.ToggleGamble()
     if not IsOn() then ns.Print(TEXT_NOT_ACTIVE); return end
     if not window then CreateWindow() end
@@ -1132,9 +916,6 @@ local function OpenGamble()
     ns.ToggleGamble()
 end
 
---- React to Gamble-related setting changes and keep the window synchronized.
--- @local
--- @param key Setting name reported by the shared settings manager.
 local function OnSettingChanged(key)
     if key == "enabled" or key == "gamble" then
         if not IsOn() then
@@ -1153,11 +934,6 @@ local function OnSettingChanged(key)
     UpdateDisplay()
 end
 
---- Dispatch chat, system-roll, and addon-message events to their handlers.
--- @local
--- @param _ Frame receiving the event.
--- @param event WoW event name.
--- @param ... Event-specific arguments.
 OnEvent = function(_, event, ...)
     if event == "CHAT_MSG_SYSTEM" then
         OnSystemMessage(...)

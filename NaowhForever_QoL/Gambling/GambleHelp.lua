@@ -1,3 +1,4 @@
+-- GambleHelp.lua: in-game instructions for Gamble sessions.
 local ns = _G.NaowhForever
 
 ns.GambleHelpText = [[HOW TO PLAY

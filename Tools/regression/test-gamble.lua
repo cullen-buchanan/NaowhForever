@@ -1,4 +1,4 @@
--- Offline checks for Gamble's session flow, roll tracking, tie-breaks and Deathroll.
+-- test-gamble.lua: offline tests for Gamble sessions and rolls.
 local checks = 0
 local function check(label, value) assert(value, label); checks = checks + 1 end
 
