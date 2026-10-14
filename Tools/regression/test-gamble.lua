@@ -513,7 +513,6 @@ check("Deathroll then announces its randomly selected first roller and range",
         and LastAddon():match("^T|[^|]+|1050|" .. Lit(HOST.guid) .. "$"))
 Event("CHAT_MSG_SYSTEM", "You roll 40 (1-1050)")
 check("Deathroll does not automatically announce every next turn", not Chat("Alice, roll", "PARTY"))
-addonsBeforeQuery = #state.addons
 Addon("Q", ALICE)
 check("a late window is told whose turn is next, not who rolled first",
     state.addons[#state.addons - 1][2]:match("^M|[^|]+|1050|" .. Lit(HOST.guid) .. "|" .. Lit(ALICE.guid) .. "|"
