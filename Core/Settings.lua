@@ -94,7 +94,7 @@ local S = UI.ModuleSettings("qol", {
     xpBar = F.xpBar, xpBarLeftText = "level", xpBarCenterText = "xp", xpBarRightText = "percent",
     xpBarTopLeft = "played", xpBarTopRight = "none", xpBarBottomLeft = "pace",
     xpBarBottom = "none", xpBarBottomRight = "none", xpBarTop = "none", xpBarLeft = "none",
-    xpBarRight = "none", xpBarIncomplete = false, xpBarMaxLevel = false,
+    xpBarRight = "none", xpBarIncomplete = false, xpBarMaxLevel = false, xpBarKeepBlizzard = false,
     xpBarResetOnReload = false, xpBarTextsHover = "around", xpBarShine = true, xpBarNotches = true,
     xpBarRestedStripes = false, xpBarGainPulse = false, xpBarReadyGlow = false, xpBarLevelFlash = false,
     xpBarBreakdown = false, xpBarWidth = 520, xpBarHeight = 26,
@@ -256,6 +256,9 @@ local S = UI.ModuleSettings("qol", {
     trainerPos = { point = "TOP", relPoint = "TOP", x = -274, y = -77 },
 
     flightTimer = F.flightTimer, flightTimerScale = 1, flightTimerAlpha = 1, flightEarlyLanding = true, flightTimerMapTime = false,
+    flightPoint = F.flightPoint, flightPointFont = "",
+    flightPointFontSize = 12, flightPointOutline = "OUTLINE", flightPointBackground = "none",
+    flightPointCustom = false, flightPointColor = { r = ns.THEME.accent.r, g = ns.THEME.accent.g, b = ns.THEME.accent.b },
     flightGame = "aim", quizCamp = F.quizCamp,
     quizPos = { point = "TOP", relPoint = "TOP", x = 0, y = -127 },
     flightTimerFont = "", flightTimerOutline = "NONE", flightTimerTexture = "",

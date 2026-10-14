@@ -110,12 +110,16 @@ local function Session(settings, opts)
             IsAddOnLoaded = function(name) return game.loaded[name] and true or false end,
             GetAddOnInfo = function(name) return name, name end,
             DisableAddOn = function(name) game.loaded[name] = nil; log.disabled = name end,
-            LoadAddOn = function(name)
-                log.dataLoaded = name
-                ns.GlimmerSpots = { [1429] = { 1731, 500, 520, 1618, 510, 500, 1732, 900, 900 } }
+        },
+        C_EncodingUtil = {
+            DecodeBase64 = function(s) return s end,
+            DecompressString = function(s) return s end,
+            DeserializeCBOR = function(s)
+                log.dataLoaded = s
+                return { 1429, { 1731, 500, 520, 1618, 510, 500, 1732, 900, 900 } }
             end,
         },
-        Enum = { TooltipDataLineType = { QuestObjective = 8 } },
+        Enum = { TooltipDataLineType = { QuestObjective = 8 }, CompressionMethod = { Deflate = 0 } },
         UnitGUID = function() return game.guid end,
         UnitIsGameObject = function() return game.guid ~= nil and game.object end,
         UnitIsInInteractRange = function() return game.near end,
@@ -300,13 +304,25 @@ log.Set("hideLocked", true)
 check("too low and hidden: dark", Lit(log) == nil)
 log.Set("hideLocked", false)
 
--- No Mining at all: ore is not this character's to gather.
+-- No Mining at all: grey, like a node the skill is too low for.
 log.game.mining = 0
 log.Fire("PLAYER_SOFT_INTERACT_CHANGED", "x", "y")
-check("no Mining: ore stays dark", Lit(log) == nil)
-log.game.mining = 20
+fx = Lit(log)
+check("no Mining: grey and locked", fx and fx.locked == true and fx.r == St.LOCKED_RGB.r)
+check("no Mining: the skill it needs", LineText(log) == "Requires Mining 65")
+log.Set("hideLocked", true)
+check("no Mining and hidden: dark", Lit(log) == nil)
+log.Set("hideLocked", false)
+log.game.mining = 70
 log.Fire("PLAYER_SOFT_INTERACT_CHANGED", "x", "y")
-check("Mining learned: ore lights again", Lit(log) ~= nil)
+check("Mining learned: ore lights in its color", Lit(log) and Lit(log).locked == false)
+
+-- A vein missing from the node data, known only by its cursor: grey without Mining too.
+log.game.guid, log.game.cursor, log.game.mining = GUID(999999), "Interface\\Cursor\\Mine", 0
+log.Fire("PLAYER_SOFT_INTERACT_CHANGED", "x", "y")
+fx = Lit(log)
+check("unlisted vein, no Mining: grey and locked", fx and fx.locked == true and fx.r == St.LOCKED_RGB.r)
+log.game.guid, log.game.cursor, log.game.mining = GUID(TIN), nil, 70
 
 -- An NPC: no nameplate opened for it.
 log.game.guid, log.game.object = "Creature-0-1-2-3-4-5", false
@@ -429,7 +445,8 @@ do
     m.Login()
     check("map features off: the spot data is not loaded", m.dataLoaded == nil)
     m.Set("minimapIcons", true)
-    check("minimap icons on: the spot data loads", m.dataLoaded == "NaowhForever_GlimmerData")
+    check("minimap icons on: the packed spots are unpacked, once, and let go", type(m.dataLoaded) == "string"
+        and #m.dataLoaded > 0 and m.ns.GlimmerSpotsPacked == nil and m.ns.GlimmerSpots[1429] ~= nil)
     local shown = {}
     for _, f in ipairs(m.frames) do
         if f.ring and f.shown and f.id then shown[#shown + 1] = f end
