@@ -60,6 +60,7 @@ ns.FEATURES = {
         autoRepair = true,
         sellJunk = true,
         restock = true,
+        restockHunterAmmo = false,
         foodBar = false,
         consumableBar = false,
         bagSpace = false,
@@ -67,6 +68,7 @@ ns.FEATURES = {
         townMap = true,
         mapUnexplored = true,
         zoneLevels = false,
+        mapFishing = false,
         mapSkyborne = false,
         gearSets = true,
         gearBarVisible = true,
@@ -90,7 +92,6 @@ ns.FEATURES = {
         cursorClip = false,
         crosshair = false,
         petTracker = false,
-        equipReminder = true,
         chatZones = false,
         mouseRing = false,
         gcdTracker = false,
@@ -181,6 +182,7 @@ ns.FEATURES = {
         enabled = true,
         raidBuffs = false,
         personalBuffs = true,
+        weaponEnhancements = false,
         campfire = true,
         campNearbyAlert = true,
         lowHealth = true,
@@ -189,9 +191,6 @@ ns.FEATURES = {
         enabled = true,
         focusEnabled = false,
         warnSound = false,
-    },
-    damageMeter = {
-        enabled = false,
     },
     pvp = {
         enabled = false,
@@ -204,6 +203,13 @@ ns.FEATURES = {
     },
     instanceTracker = {
         enabled = false,
+    },
+    glimmer = {
+        enabled = false,
+        questSparkle = false,
+        minimapIcons = false,
+        gatheredPins = false,
+        cutout = false,
     },
     swingTimer = {
         enabled = true,

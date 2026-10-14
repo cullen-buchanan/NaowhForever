@@ -78,10 +78,21 @@ env.C_EncodingUtil = {
 env.Enum = { CompressionMethod = { Deflate = 0 } }
 env.InCombatLockdown = function() return false end
 env.C_AddOns = { IsAddOnLoaded = function() return true end, LoadAddOn = function() end }
-env.GetTime = function() return 0 end
+local now, timers = 0, {}
+env.GetTime = function() return now end
+env.C_Timer = { After = function(delay, fn) timers[#timers + 1] = { at = now + delay, fn = fn } end }
+env.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
+local function RunTimers()
+    local due = timers
+    timers = {}
+    for _, t in ipairs(due) do
+        if t.at <= now then t.fn() else timers[#timers + 1] = t end
+    end
+end
 env.debugprofilestop = function() return 0 end
 
 Load("NaowhForever_Journeys/Constants.lua")
+Load("NaowhForever_Journeys/Data/Network.lua")
 Load("NaowhForever_JourneysData/Data.lua")
 for line in Read("NaowhForever_JourneysData/JourneysData.xml"):gmatch('file="Data\\(Map2991[^"]*)"') do
     Load("NaowhForever_JourneysData/Data/" .. line)
@@ -128,5 +139,42 @@ local placeCost = Walk.Cost(ZEPHRAS, a, "s8.2")
 Check(placeCost ~= nil, "a spot walks to a network place: " .. tostring(placeCost))
 Check(Walk.Cost(ZEPHRAS, "s8.2", "s8.2") == 0, "a place is no walk from itself")
 Check(Walk.Cost(ZEPHRAS, a, "nowhere") == nil, "an unknown place: no answer, not a wall")
+
+-- The Eastern Kingdoms: Stormwind Harbor's dock is the ship's spot in the water at the end of a long pier
+-- the walking maps do not have. Its walk ends where the pier meets the land, never across the harbour,
+-- and the open sea is no walk at all.
+for line in Read("NaowhForever_JourneysData/JourneysData.xml"):gmatch('file="Data\\(Map0[^"]*)"') do
+    Load("NaowhForever_JourneysData/Data/" .. line)
+end
+local EK = 0
+local CITY = { c = EK, x = -8830, y = 650 }
+local DOCK = { c = EK, x = -8654.5, y = 1344.4 }
+local city, dock = Walk.From(CITY), Walk.From(DOCK)
+Check(city and dock and dock.off, "the dock walks from the land its pier joins")
+local harbour = Walk.Path(city, dock)
+Check(harbour and harbour[#harbour - 1] == DOCK.x and harbour[#harbour] == DOCK.y, "the walk there is drawn, out to the dock")
+local measured, baked = Walk.Cost(EK, city, dock), Walk.Cost(EK, city, "s5.2")
+Check(measured and baked and math.abs(measured - baked) < 50, ("and costs what the baked table says: %s and %s"):format(
+    tostring(measured), tostring(baked)))
+local onPier = Walk.From({ c = EK, x = (DOCK.x + dock.x) / 2, y = (DOCK.y + dock.y) / 2 })
+Check(onPier and onPier.poly == dock.poly and onPier.tx == dock.tx, "halfway along the pier walks from its root too")
+Check(Walk.From({ c = EK, x = -10500, y = 2600 }) == false, "the open sea is off the walking maps: no walk, not a straight line")
+
+-- Idle for a minute, the built tiles, crossings and walks are let go: a journey or estimate builds them again.
+local before = Walk.Tile(EK, Walk.TileOf(CITY.x, CITY.y))
+now = now + 30
+RunTimers()
+Check(Walk.Tile(EK, Walk.TileOf(CITY.x, CITY.y)) == before, "in use, the built tiles are kept")
+Check(#timers == 1, "one release waits, however much is used")
+now = now + 59
+RunTimers()
+Check(Walk.Tile(EK, Walk.TileOf(CITY.x, CITY.y)) == before, "used again within the minute, they stay")
+now = now + 61
+RunTimers()
+RunTimers()
+local again = Walk.Tile(EK, Walk.TileOf(CITY.x, CITY.y))
+Check(again and again ~= before and #again.polys == #before.polys, "a minute idle, they are let go and built the same again")
+local city2 = Walk.From(CITY)
+Check(city2 and city2.poly == city.poly and Walk.Cost(EK, city2, dock) == measured, "and a walk after the release costs the same")
 
 print(("journeys walk: %d checks passed"):format(checks))
