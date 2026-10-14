@@ -2,11 +2,17 @@
 local checks = 0
 local function check(label, value) assert(value, label); checks = checks + 1 end
 
+local HOST = { first = "Host", surname = "Brightmane", guid = "Player-1-0000HOST" }
+local ALICE = { first = "Alice", surname = "Stone", guid = "Player-1-000ALICE" }
+local BOB = { first = "Bob", surname = "Hill", guid = "Player-1-00000BOB" }
+local GUEST = { first = "Guest", surname = "Wood", guid = "Player-1-000GUEST" }
+local CHARLIE = { first = "Charlie", surname = "", guid = "Player-1-0CHARLIE" }
+
 local state = { settings = { enabled = true, gamble = false, gambleChannel = "PARTY", gamblePool = "200g00s",
     gambleMode = "classic", gambleJoinWord = "join", gambleLeaveWord = "leave" },
     buttons = {}, chats = {}, addons = {},
     prints = {}, frames = {}, listeners = {}, editboxes = {}, fonts = {}, inRaid = false,
-    party = { "Alice Stone", "Bob", "Guest" }, disconnected = {} }
+    party = { ALICE, BOB, GUEST }, disconnected = {}, secrets = {} }
 
 local widgetMethods = {}
 function widgetMethods:SetText(text) self.text = text end
@@ -28,6 +34,9 @@ function widgetMethods:Hide()
     if not self.shown then return end
     self.shown = false
     for _, callback in ipairs(self.hooks.OnHide or {}) do callback(self) end
+end
+function widgetMethods:SetShown(shown)
+    if shown then self:Show() else self:Hide() end
 end
 function widgetMethods:IsShown() return self.shown end
 function widgetMethods:SetEnabled(enabled) self.enabled = enabled end
@@ -97,6 +106,12 @@ function S.OnChange(listener)
     state.listeners[#state.listeners + 1] = listener
 end
 
+local catalog = {}
+local catalogChunk = assert(loadfile("Core/Locales/enUS.lua"))
+setfenv(catalogChunk, { _G = { NaowhForeverLocale = catalog } })
+catalogChunk()
+local untranslated = {}
+
 local ns = {
     QoLSettings = S,
     THEME = { muted = {}, accent = {} },
@@ -105,6 +120,10 @@ local ns = {
         Settings = { Page = function() return { Card = function(_, spec) state.card = spec end } end } },
     UI = {},
 }
+function ns.L(text)
+    if catalog[text] == nil then untranslated[#untranslated + 1] = text end
+    return text
+end
 function ns.Font(parent)
     local font = widget()
     font.parent = parent
@@ -141,6 +160,12 @@ function ns.UI.SlimScroll(parent)
     return scroll
 end
 
+local function Member(unit)
+    if unit == "player" then return HOST end
+    local index = tonumber(unit:match("^party(%d+)$"))
+    return index and state.party[index]
+end
+
 local env = setmetatable({
     _G = { NaowhForever = ns },
     RANDOM_ROLL_RESULT = "%s rolls %d (%d-%d)",
@@ -162,18 +187,23 @@ local env = setmetatable({
         if parent == state.helpScroll then state.helpContent = frame end
         return frame
     end,
+    issecretvalue = function(value) return state.secrets[value] == true end,
     UnitName = function(unit)
-        if unit == "player" then return "Host" end
-        local index = tonumber(unit:match("^party(%d+)$"))
-        return index and state.party[index]
+        local member = Member(unit)
+        return member and member.first
     end,
     UnitFullName = function(unit)
-        if unit == "player" then return "Host" end
-        local index = tonumber(unit:match("^party(%d+)$"))
-        return index and state.party[index]
+        local member = Member(unit)
+        if member then return member.first, member.surname end
+    end,
+    UnitGUID = function(unit)
+        local member = Member(unit)
+        return member and member.guid
     end,
     UnitIsConnected = function(unit) return state.disconnected[unit] ~= true end,
     GetNumGroupMembers = function() return #state.party + 1 end,
+    GetNumSubgroupMembers = function() return #state.party end,
+    GetNormalizedRealmName = function() return "Forever" end,
     Ambiguate = function(name, mode)
         return mode == "short" and (name:gsub("%-%w+$", "")) or name
     end,
@@ -183,24 +213,21 @@ local env = setmetatable({
     RandomRoll = function(minimum, maximum) state.roll = { minimum, maximum } end,
     strlower = string.lower,
     strtrim = function(text) return (text:gsub("^%s+", ""):gsub("%s+$", "")) end,
-    math = { floor = math.floor, abs = math.abs, random = function() return 1 end },
+    math = { floor = math.floor, abs = math.abs, min = math.min, random = function() return 1 end },
 }, { __index = _G })
-env._G.NaowhForever = ns
-env._G.RandomRoll = env.RandomRoll
-env._G.RANDOM_ROLL_RESULT = env.RANDOM_ROLL_RESULT
-env._G.YOU_ROLL_RESULT = env.YOU_ROLL_RESULT
-local helpFile = assert(io.open("NaowhForever_QoL/Gambling/GambleHelp.lua", "rb"))
-local helpSource = helpFile:read("*a"):gsub("\r\n", "\n")
-helpFile:close()
-local helpChunk = assert(loadstring(helpSource, "GambleHelp.lua"))
-setfenv(helpChunk, env)
-helpChunk()
-local file = assert(io.open("NaowhForever_QoL/Gambling/Gamble.lua", "rb"))
-local source = file:read("*a"):gsub("\r\n", "\n")
-file:close()
-local chunk = assert(loadstring(source, "Gamble.lua"))
-setfenv(chunk, env)
-chunk()
+env._G = env
+env.NaowhForever = ns
+local function Load(path)
+    local file = assert(io.open(path, "rb"))
+    local source = file:read("*a"):gsub("\r\n", "\n")
+    file:close()
+    local chunk = assert(loadstring(source, path))
+    setfenv(chunk, env)
+    chunk()
+end
+Load("Core/Senders.lua")
+Load("NaowhForever_QoL/Gambling/GambleHelp.lua")
+Load("NaowhForever_QoL/Gambling/Gamble.lua")
 
 local function Button(text)
     for _, button in ipairs(state.buttons) do
@@ -221,6 +248,18 @@ local function Event(event, ...)
     state.events.scripts.OnEvent(state.events, event, ...)
 end
 
+local function Say(text, member, event)
+    Event(event or "CHAT_MSG_PARTY", text, member.first, "", "", "", "", 0, 0, "", 0, 1, member.guid)
+end
+
+local function Addon(message, member)
+    Event("CHAT_MSG_ADDON", "NaowhGamble", message, "PARTY", member.first .. " " .. member.surname)
+end
+
+local function Roll(member, value, max)
+    Event("CHAT_MSG_SYSTEM", ("%s rolls %d (1-%d)"):format(member.first, value, max or 1050))
+end
+
 local function Chat(text, channel)
     for i = #state.chats, 1, -1 do
         if state.chats[i][1]:find(text, 1, true) and (not channel or state.chats[i][2] == channel) then
@@ -228,6 +267,16 @@ local function Chat(text, channel)
         end
     end
     return false
+end
+
+local function Lit(text) return (text:gsub("%p", "%%%0")) end
+
+local function LastAddon() return state.addons[#state.addons][2] end
+
+local function Entries(...)
+    local out = {}
+    for i, member in ipairs({ ... }) do out[i] = member.guid .. ":" .. member.first end
+    return table.concat(out, ",")
 end
 
 ns.ToggleGamble()
@@ -314,83 +363,117 @@ state.editboxes[1].scripts.OnEnterPressed()
 check("pool rejects values that do not include both currency suffixes",
     S.Get("gamblePool") == "10g50s"
         and state.prints[#state.prints]:find("10g50s", 1, true) ~= nil)
+state.editboxes[1]:SetText("10001g00s")
+state.editboxes[1].scripts.OnEnterPressed()
+check("the pool stops at 1,000,000 silver, the most /roll is given",
+    S.Get("gamblePool") == "10g50s" and state.prints[#state.prints]:find("10000g00s", 1, true) ~= nil)
 state.editboxes[1]:SetText("10g50s")
 S.Set("gambleChannel", "UNSUPPORTED")
 Button("New Game"):Click()
 check("a new Classic session is announced in the selected channel",
     S.Get("gambleChannel") == "PARTY" and Chat("Classic, pool 10g50s", "PARTY")
-        and state.addons[#state.addons][2]:match("^O|"))
+        and LastAddon():match("^O|"))
 check("the new-game announcement explains how to leave",
     Chat('Say "join" to join or "leave" to leave; use /roll when it\'s your turn.', "PARTY"))
-check("the session announcement includes its join and leave words",
-    state.addons[#state.addons][2]:match("^O|[^|]+|1050|classic|join|leave|Host$") ~= nil)
+check("the session announcement carries its join and leave words and the host's GUID",
+    LastAddon():match("^O|[^|]+|1050|classic|join|leave|" .. Lit(HOST.guid) .. "$") ~= nil)
 Button("Start Rolling"):Click()
 check("Start Rolling explains when more players are needed",
     state.prints[#state.prints]:find("At least two players", 1, true) ~= nil)
-Event("CHAT_MSG_PARTY", "join", "Host")
-Event("CHAT_MSG_PARTY", "join", "Alice Stone")
-Event("CHAT_MSG_PARTY", "join", "Bob")
+local chatsBeforeJoin = #state.chats
+Say("join", HOST)
+Say("join", ALICE)
+Say("join", BOB)
 check("host and players join through group chat",
-    state.roster.text:find("Host", 1, true) ~= nil
-        and state.roster.text:find("Alice Stone", 1, true) ~= nil
-        and state.roster.text:find("Bob", 1, true) ~= nil)
-check("roster broadcasts retain the expected chunk protocol",
-    state.addons[#state.addons][2]:match("^R|[^|]+|3|1|1|Host,Alice Stone,Bob$") ~= nil)
+    state.roster.text == "Host\nAlice\nBob")
+check("a join is not repeated in group chat", #state.chats == chatsBeforeJoin)
+check("each join sends only that player to the group",
+    LastAddon():match("^J|[^|]+|" .. Lit(BOB.guid) .. "|Bob$") ~= nil
+        and state.addons[#state.addons - 1][2]:match("^J|[^|]+|" .. Lit(ALICE.guid) .. "|Alice$") ~= nil)
+local addonsBeforeQuery = #state.addons
+Addon("Q", ALICE)
+check("a window that opens late gets the session and whole roster",
+    state.addons[addonsBeforeQuery + 1][2]:match("^O|")
+        and state.addons[addonsBeforeQuery + 2][2]:match("^R|[^|]+|1|1|1|(.+)$") == Entries(HOST, ALICE, BOB))
+Say("leave", BOB)
+check("leaving is said in chat and sent to the group",
+    Chat("Bob left the Gamble session.", "PARTY") and LastAddon():match("^L|[^|]+|" .. Lit(BOB.guid) .. "$")
+        and state.roster.text == "Host\nAlice")
+Say("join", BOB)
 Button("Start Rolling"):Click()
 check("Start Rolling starts the Classic round when players joined",
     state.status.text == "Waiting for rolls")
-check("round broadcasts retain the expected chunk protocol",
-    state.addons[#state.addons][2]:match("^C|[^|]+|1|1050|1|1|Host,Alice Stone,Bob$") ~= nil)
+check("round broadcasts keep the chunk protocol, keyed by GUID",
+    LastAddon():match("^C|[^|]+|1|1050|1|1|(.+)$") == Entries(HOST, ALICE, BOB))
 check("starting Classic announces that everyone can roll and the silver limit",
     Chat("Everyone can start rolling from 1 to 1050.", "PARTY"))
 Button("Announce Rolls"):Click()
 check("Classic announces only players still waiting and the roll range",
-    Chat("Still need to roll: Host, Alice Stone and Bob. Roll from 1 to 1050", "PARTY"))
-Event("CHAT_MSG_SYSTEM", "You roll 70 (1-1050)")
-check("a local /roll result is counted for the host", state.roster.text:find("Host  70", 1, true) ~= nil)
-Event("CHAT_MSG_SYSTEM", "You roll 90 (1-1050)")
+    Chat("Still need to roll: Host, Alice and Bob. Roll from 1 to 1050", "PARTY"))
+Roll(HOST, 70)
+check("the host's own roll counts though their name has a surname", state.roster.text:find("Host  70", 1, true) ~= nil)
+Roll(HOST, 90)
 check("Classic ignores a player's later reroll", state.roster.text:find("Host  70", 1, true) ~= nil)
 Button("Announce Rolls"):Click()
 check("Classic roll calls exclude players who already rolled",
-    Chat("Still need to roll: Alice Stone and Bob. Roll from 1 to 1050", "PARTY"))
-Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 90 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Bob rolls 20 (1-1050)")
+    Chat("Still need to roll: Alice and Bob. Roll from 1 to 1050", "PARTY"))
+state.secrets["Alice rolls 5 (1-1050)"] = true
+Event("CHAT_MSG_SYSTEM", "Alice rolls 5 (1-1050)")
+state.secrets = {}
+check("a secret roll line is skipped", not state.roster.text:find("Alice  5", 1, true))
+Roll(ALICE, 90)
+Roll(BOB, 20)
 check("Classic settlement converts a silver difference to gold and silver",
-    Chat("Bob pays Alice Stone 0g70s", "PARTY"))
+    Chat("Bob pays Alice 0g70s", "PARTY"))
 
 Button("New Game"):Click()
-Event("CHAT_MSG_PARTY", "join", "Host")
-Event("CHAT_MSG_PARTY", "join", "Alice Stone")
-Event("CHAT_MSG_PARTY", "join", "Bob")
+Say("join", HOST)
+Say("join", ALICE)
 Button("Start Rolling"):Click()
-Event("CHAT_MSG_SYSTEM", "You roll 20 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 90 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Bob rolls 90 (1-1050)")
+local chatsBeforeTie = #state.chats
+Event("CHAT_MSG_SYSTEM", "You roll 300 (1-1050)")
+Roll(ALICE, 300)
+check("when everyone ties, the round is rolled again and nobody pays",
+    #state.chats == chatsBeforeTie + 1 and Chat("Everyone rolled 300: roll again from 1 to 1050.", "PARTY")
+        and LastAddon():match("^C|[^|]+|2|1050|1|1|(.+)$") == Entries(HOST, ALICE)
+        and state.status.text == "Waiting for rolls" and not state.roster.text:find("300", 1, true))
+Event("CHAT_MSG_SYSTEM", "You roll 40 (1-1050)")
+Roll(ALICE, 10)
+check("the reroll settles the game", Chat("Alice pays Host 0g30s", "PARTY"))
+
+Button("New Game"):Click()
+Say("join", HOST)
+Say("join", ALICE)
+Say("join", BOB)
+Button("Start Rolling"):Click()
+Roll(HOST, 20)
+Roll(ALICE, 90)
+Roll(BOB, 90)
 check("a tied high side rerolls only its tied players",
-    state.addons[#state.addons][2]:match("^C|[^|]+|2|1050|1|1|Alice Stone,Bob$") ~= nil)
+    LastAddon():match("^C|[^|]+|2|1050|1|1|(.+)$") == Entries(ALICE, BOB))
 local settlementsBeforeTieBreak = #state.chats
-Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 10 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Bob rolls 100 (1-1050)")
+Roll(ALICE, 10)
+Roll(BOB, 100)
 check("a high-side tie-break keeps the original spread and unique low",
     #state.chats == settlementsBeforeTieBreak + 1
         and Chat("Host pays Bob 0g70s", "PARTY"))
 
 Button("New Game"):Click()
-Event("CHAT_MSG_PARTY", "join", "Host")
-Event("CHAT_MSG_PARTY", "join", "Alice Stone")
-Event("CHAT_MSG_PARTY", "join", "Bob")
-Event("CHAT_MSG_PARTY", "join", "Guest")
+Say("join", HOST)
+Say("join", ALICE)
+Say("join", BOB)
+Say("join", GUEST)
 Button("Start Rolling"):Click()
-Event("CHAT_MSG_SYSTEM", "You roll 20 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 90 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Bob rolls 90 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Guest rolls 20 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 50 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Bob rolls 70 (1-1050)")
+Roll(HOST, 20)
+Roll(ALICE, 90)
+Roll(BOB, 90)
+Roll(GUEST, 20)
+Roll(ALICE, 50)
+Roll(BOB, 70)
 check("when both extremes tie, the low-side reroll excludes the resolved high side",
-    state.addons[#state.addons][2]:match("^C|[^|]+|3|1050|1|1|Host,Guest$") ~= nil)
-Event("CHAT_MSG_SYSTEM", "You roll 20 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Guest rolls 10 (1-1050)")
+    LastAddon():match("^C|[^|]+|3|1050|1|1|(.+)$") == Entries(HOST, GUEST))
+Roll(HOST, 20)
+Roll(GUEST, 10)
 check("both tie-breaks preserve the original high-low settlement amount",
     Chat("Guest pays Bob 0g70s", "PARTY"))
 
@@ -409,59 +492,89 @@ check("the main-window mode button switches to Deathroll",
 Button("New Game"):Click()
 check("custom join and leave words are announced for a new game",
     Chat('Say "ready" to join or "gone" to leave; use /roll when it\'s your turn.', "PARTY"))
-Event("CHAT_MSG_PARTY", "ready", "Host")
-Event("CHAT_MSG_PARTY", "ready", "Alice Stone")
+state.secrets.ready = true
+Say("ready", HOST)
+state.secrets = {}
+check("a secret chat line is skipped without joining anyone", state.roster.text == "No players have joined yet.")
+Say("ready", HOST)
+Say("ready", ALICE)
 Button("Start Rolling"):Click()
 check("Deathroll starts and waits for its first /roll",
     state.status.text == "Deathroll in progress")
 local duelAnnouncement = state.chats[#state.chats - 1]
 local starterAnnouncement = state.chats[#state.chats]
 check("Deathroll announces the two randomly selected participants first",
-    duelAnnouncement[1] == "Deathroll: Host and Alice Stone are playing for 10g50s."
+    duelAnnouncement[1] == "Deathroll: Host and Alice are playing for 10g50s."
         and duelAnnouncement[2] == "PARTY")
 check("Deathroll then announces its randomly selected first roller and range",
     starterAnnouncement[1] == "Host was randomly selected to roll first. Roll from 1 to 1050."
         and starterAnnouncement[2] == "PARTY"
-        and state.addons[#state.addons - 1][2]:match("|Host|Alice Stone|Host$")
-        and state.addons[#state.addons][2]:match("^T|[^|]+|1050|Host$"))
+        and state.addons[#state.addons - 1][2]:match("|" .. Lit(HOST.guid) .. "|" .. Lit(ALICE.guid) .. "|" .. Lit(HOST.guid) .. "$")
+        and LastAddon():match("^T|[^|]+|1050|" .. Lit(HOST.guid) .. "$"))
 Event("CHAT_MSG_SYSTEM", "You roll 40 (1-1050)")
-check("Deathroll does not automatically announce every next turn", not Chat("Alice Stone, roll", "PARTY"))
+check("Deathroll does not automatically announce every next turn", not Chat("Alice, roll", "PARTY"))
+addonsBeforeQuery = #state.addons
+Addon("Q", ALICE)
+check("a late window is told whose turn is next, not who rolled first",
+    state.addons[#state.addons - 1][2]:match("^M|[^|]+|1050|" .. Lit(HOST.guid) .. "|" .. Lit(ALICE.guid) .. "|"
+        .. Lit(ALICE.guid) .. "$")
+        and LastAddon():match("^T|[^|]+|40|" .. Lit(ALICE.guid) .. "$"))
 Button("Announce Rolls"):Click()
 check("Deathroll announces the current player and their roll range on demand",
-    Chat("Alice Stone, roll from 1 to 40", "PARTY"))
-Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 1 (1-40)")
+    Chat("Alice, roll from 1 to 40", "PARTY"))
+Roll(ALICE, 1, 40)
 check("rolling 1 pays the full Deathroll pool",
-    Chat("Alice Stone pays Host 10g50s", "PARTY"))
+    Chat("Alice pays Host 10g50s", "PARTY"))
 
-Event("CHAT_MSG_ADDON", "NaowhGamble", "O|remote|200|classic|ready|gone|Guest",
-    "PARTY", "Host")
+state.secrets.NaowhGamble = true
+Addon("O|secret|200|classic|ready|gone|" .. GUEST.guid, GUEST)
+state.secrets = {}
+check("a secret addon prefix is skipped", state.status.text == "Session complete")
+Addon("O|forged|200|classic|ready|gone|" .. BOB.guid, GUEST)
+check("a session sent for someone else's GUID is ignored", state.status.text == "Session complete")
+Addon("O|remote|200|classic|ready|gone|" .. GUEST.guid, GUEST)
 check("players use the advertised chat join word instead of a Join button",
-    not HasButton("Join") and Chat('Say "ready" to join or "gone" to leave', "PARTY"))
+    not HasButton("Join") and state.status.text == "Waiting for players to join")
+Addon("J|remote|" .. ALICE.guid .. "|Alice", ALICE)
+check("only the host can change the roster", state.roster.text == "No players have joined yet.")
+Addon("J|remote|" .. ALICE.guid .. "|Alice", GUEST)
+check("a join from the host adds that player", state.roster.text == "Alice")
 local localRoster = state.roster.text
-Event("CHAT_MSG_ADDON", "NaowhGamble", "R|remote|1|1|2|Host,Alice", "PARTY", "Host")
+Addon("R|remote|1|1|2|" .. Entries(GUEST, ALICE), GUEST)
 check("a partial roster waits for every chunk", state.roster.text == localRoster)
-Event("CHAT_MSG_ADDON", "NaowhGamble", "R|remote|1|2|2|Bob,Charlie", "PARTY", "Host")
-check("chunked rosters assemble before display", state.roster.text:find("Charlie", 1, true) ~= nil)
-Event("CHAT_MSG_ADDON", "NaowhGamble", "C|remote|1|100|1|2|Host,Alice", "PARTY", "Host")
-Event("CHAT_MSG_ADDON", "NaowhGamble", "C|remote|1|100|2|2|Bob,Charlie", "PARTY", "Host")
+Addon("R|remote|1|2|2|" .. Entries(BOB, CHARLIE), GUEST)
+check("chunked rosters assemble before display", state.roster.text == "Guest\nAlice\nBob\nCharlie")
+Addon("L|remote|" .. CHARLIE.guid, GUEST)
+check("a leave from the host drops that player", state.roster.text == "Guest\nAlice\nBob")
+Event("GROUP_ROSTER_UPDATE")
+check("the host stays connected across a roster update", state.status.text == "Waiting for players to join")
+Addon("C|remote|1|100|1|2|" .. Entries(GUEST, ALICE), GUEST)
+Addon("C|remote|1|100|2|2|" .. Entries(BOB), GUEST)
 check("chunked roll rounds accept player /roll messages",
-    state.events.events.CHAT_MSG_SYSTEM and not HasButton("Roll for Me"))
+    state.status.text == "Waiting for rolls" and state.events.events.CHAT_MSG_SYSTEM and not HasButton("Roll for Me"))
+Roll(ALICE, 42, 100)
+check("a client counts the rolls it sees", state.roster.text:find("Alice  42", 1, true) ~= nil)
+Event("UNIT_CONNECTION", "party1", true)
+check("a joined client keeps its session while the host is online", state.status.text == "Waiting for rolls")
 
 Button("X"):Click()
 check("closing keeps listeners active for the joined session",
     not state.window:IsShown() and state.events.events.CHAT_MSG_ADDON)
-Event("CHAT_MSG_ADDON", "NaowhGamble", "D|remote|Bob|Alice|10", "PARTY", "Host")
+Addon("D|remote|Bob|Alice|10", GUEST)
 check("a completed session unregisters hidden-window listeners", next(state.events.events) == nil)
 
 ns.ToggleGamble()
-state.party = { "Alice Stone", "Bob", "Guest" }
-Event("CHAT_MSG_ADDON", "NaowhGamble", "O|host-left|200|classic|ready|gone|Guest", "PARTY", "Guest")
-state.party = { "Alice Stone", "Bob" }
+Addon("O|host-left|200|classic|ready|gone|" .. GUEST.guid, GUEST)
+state.party = { ALICE, BOB }
 Event("GROUP_ROSTER_UPDATE")
 check("a remote session ends when its host leaves the group",
     state.status.text == "Host left; session ended." and Button("New Game").enabled)
-state.party = { "Alice Stone", "Bob", "Guest" }
-Event("CHAT_MSG_ADDON", "NaowhGamble", "O|host-offline|200|classic|ready|gone|Guest", "PARTY", "Guest")
+state.party = { ALICE, BOB, GUEST }
+Addon("O|host-offline|200|classic|ready|gone|" .. GUEST.guid, GUEST)
+local hostOnline = state.status.text
+Button("New Game"):Click()
+check("a second host cannot start a session while the first is online",
+    hostOnline == "Waiting for players to join" and state.prints[#state.prints]:find("Only the session host", 1, true))
 state.disconnected.party3 = true
 Event("UNIT_CONNECTION", "party3", false)
 check("a remote session ends when its host disconnects",
@@ -469,11 +582,11 @@ check("a remote session ends when its host disconnects",
 state.disconnected = {}
 Button("New Game"):Click()
 check("a new local session can start after the remote host disappears",
-    state.status.text == "Waiting for players to join" and state.addons[#state.addons][2]:match("^O|"))
+    state.status.text == "Waiting for players to join" and LastAddon():match("^O|"))
 S.Set("gambleMode", "classic")
 Button("New Game"):Click()
-Event("CHAT_MSG_PARTY", "ready", "Host")
-Event("CHAT_MSG_PARTY", "ready", "Alice")
+Say("ready", HOST)
+Say("ready", ALICE)
 Button("Start Rolling"):Click()
 check("the host can cancel an active session",
     Button("Cancel Session").enabled and state.status.text == "Waiting for rolls")
@@ -481,6 +594,13 @@ Button("Cancel Session"):Click()
 check("cancelling closes the session and announces it to the group",
     state.status.text == "Session cancelled"
         and Chat("Gamble session cancelled by Host", "PARTY")
-        and state.addons[#state.addons][2]:match("^X|"))
+        and LastAddon():match("^X|"))
 check("cancel is disabled after the session ends", Button("Cancel Session").enabled == false)
+
+check("every string Gamble translates is in the English catalog", #untranslated == 0)
+local card = state.card
+for _, text in ipairs({ card.name, card.help, card.rows[1].label, card.rows[1].buttonText, card.rows[1].help,
+        "/nf gamble: open Gamble" }) do
+    check("in the English catalog: " .. text, catalog[text] ~= nil)
+end
 print(("test-gamble: %d checks passed"):format(checks))
