@@ -223,6 +223,8 @@ check("off by default, Gamble builds no frames", #state.frames == 0 and #state.p
 S.Set("gamble", true)
 ns.ToggleGamble()
 check("opening registers the session listeners", state.window:IsShown() and state.events.events.CHAT_MSG_SYSTEM)
+check("legacy numeric pool settings are shown as gold and silver",
+    state.editboxes[1]:GetText() == "200g00s")
 local helpButton = Button("How to play")
 local helpAnchor = rawget(helpButton, "anchorPoints")[1]
 check("How to play is positioned next to the window close button",
@@ -286,15 +288,25 @@ Button("New Game"):Click()
 check("Party chat is not offered as a partial-raid channel",
     #state.addons == addonCount and state.prints[#state.prints]:find("party or raid", 1, true) ~= nil)
 state.inRaid = false
+state.editboxes[1]:SetText("10g50s")
+state.editboxes[1].scripts.OnEnterPressed()
+check("pool accepts gold and silver and stores the normalized string",
+    S.Get("gamblePool") == "10g50s" and state.editboxes[1]:GetText() == "10g50s")
+state.editboxes[1]:SetText("10g5")
+state.editboxes[1].scripts.OnEnterPressed()
+check("pool rejects values that do not include both currency suffixes",
+    S.Get("gamblePool") == "10g50s"
+        and state.prints[#state.prints]:find("10g50s", 1, true) ~= nil)
+state.editboxes[1]:SetText("10g50s")
 S.Set("gambleChannel", "UNSUPPORTED")
 Button("New Game"):Click()
 check("a new Classic session is announced in the selected channel",
-    S.Get("gambleChannel") == "PARTY" and Chat("Classic, pool 200", "PARTY")
+    S.Get("gambleChannel") == "PARTY" and Chat("Classic, pool 10g50s", "PARTY")
         and state.addons[#state.addons][2]:match("^O|"))
 check("the new-game announcement explains how to leave",
     Chat('Say "join" to join or "leave" to leave; use /roll when it\'s your turn.', "PARTY"))
 check("the session announcement includes its join and leave words",
-    state.addons[#state.addons][2]:match("^O|[^|]+|200|classic|join|leave|Host$") ~= nil)
+    state.addons[#state.addons][2]:match("^O|[^|]+|1050|classic|join|leave|Host$") ~= nil)
 Button("Start Rolling"):Click()
 check("Start Rolling explains when more players are needed",
     state.prints[#state.prints]:find("At least two players", 1, true) ~= nil)
@@ -308,23 +320,26 @@ check("host and players join through group chat",
 Button("Start Rolling"):Click()
 check("Start Rolling starts the Classic round when players joined",
     state.status.text == "Waiting for rolls")
+check("starting Classic announces that everyone can roll and the silver limit",
+    Chat("Everyone can start rolling from 1 to 1050.", "PARTY"))
 Button("Announce Rolls"):Click()
 check("Classic announces only players still waiting and the roll range",
-    Chat("Still need to roll: Host, Alice Stone and Bob. Roll from 1 to 200", "PARTY"))
-Event("CHAT_MSG_SYSTEM", "You roll 90 (1-200)")
+    Chat("Still need to roll: Host, Alice Stone and Bob. Roll from 1 to 1050", "PARTY"))
+Event("CHAT_MSG_SYSTEM", "You roll 90 (1-1050)")
 check("a local /roll result is counted for the host", state.roster.text:find("Host  90", 1, true) ~= nil)
 Button("Announce Rolls"):Click()
 check("Classic roll calls exclude players who already rolled",
-    Chat("Still need to roll: Alice Stone and Bob. Roll from 1 to 200", "PARTY"))
-Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 90 (1-200)")
-Event("CHAT_MSG_SYSTEM", "Bob rolls 20 (1-200)")
-Event("CHAT_MSG_SYSTEM", "Host rolls 70 (1-200)")
+    Chat("Still need to roll: Alice Stone and Bob. Roll from 1 to 1050", "PARTY"))
+Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 90 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Bob rolls 20 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Host rolls 70 (1-1050)")
 Button("Announce Rolls"):Click()
 check("Classic roll calls exclude players who already rolled",
-    Chat("Still need to roll: Alice Stone and Bob. Roll from 1 to 200", "PARTY"))
-Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 80 (1-200)")
-Event("CHAT_MSG_SYSTEM", "Bob rolls 30 (1-200)")
-check("the lowest pays the highest the roll difference", Chat("Bob pays Alice Stone 50 gold", "PARTY"))
+    Chat("Still need to roll: Alice Stone and Bob. Roll from 1 to 1050", "PARTY"))
+Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 180 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Bob rolls 30 (1-1050)")
+check("Classic settlement converts a silver difference to gold and silver",
+    Chat("Bob pays Alice Stone 1g50s", "PARTY"))
 
 state.editboxes[2]:SetText("ready|bad")
 state.editboxes[3]:SetText("gone")
@@ -349,20 +364,21 @@ check("Deathroll starts and waits for its first /roll",
 local duelAnnouncement = state.chats[#state.chats - 1]
 local starterAnnouncement = state.chats[#state.chats]
 check("Deathroll announces the two randomly selected participants first",
-    duelAnnouncement[1] == "Deathroll: Host and Alice Stone are playing for 200 gold."
+    duelAnnouncement[1] == "Deathroll: Host and Alice Stone are playing for 10g50s."
         and duelAnnouncement[2] == "PARTY")
 check("Deathroll then announces its randomly selected first roller and range",
-    starterAnnouncement[1] == "Host was randomly selected to roll first. Roll from 1 to 200."
+    starterAnnouncement[1] == "Host was randomly selected to roll first. Roll from 1 to 1050."
         and starterAnnouncement[2] == "PARTY"
         and state.addons[#state.addons - 1][2]:match("|Host|Alice Stone|Host$")
-        and state.addons[#state.addons][2]:match("^T|[^|]+|200|Host$"))
-Event("CHAT_MSG_SYSTEM", "You roll 40 (1-200)")
+        and state.addons[#state.addons][2]:match("^T|[^|]+|1050|Host$"))
+Event("CHAT_MSG_SYSTEM", "You roll 40 (1-1050)")
 check("Deathroll does not automatically announce every next turn", not Chat("Alice Stone, roll", "PARTY"))
 Button("Announce Rolls"):Click()
 check("Deathroll announces the current player and their roll range on demand",
     Chat("Alice Stone, roll from 1 to 40", "PARTY"))
 Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 1 (1-40)")
-check("rolling 1 pays the full Deathroll pool", Chat("Alice Stone pays Host 200 gold", "PARTY"))
+check("rolling 1 pays the full Deathroll pool",
+    Chat("Alice Stone pays Host 10g50s", "PARTY"))
 
 Event("CHAT_MSG_ADDON", "NaowhGamble", "O|remote|200|classic|ready|gone|Guest",
     "PARTY", "Host")

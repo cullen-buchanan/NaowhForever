@@ -162,7 +162,7 @@ local S = UI.ModuleSettings("qol", {
     talentPointsFontSize = 22, talentPointsOutline = "OUTLINE", talentPointsBackground = "none",
     talentPointsTheme = false,
     buffThanks = F.buffThanks, buffThanksCooldown = 10, buffThanksGroup = false, buffThanksEmote = false,
-    gamble = F.gamble, gambleChannel = "PARTY", gamblePool = 200, gambleMode = "classic",
+    gamble = F.gamble, gambleChannel = "PARTY", gamblePool = "200g00s", gambleMode = "classic",
     gambleJoinWord = "join", gambleLeaveWord = "leave",
     buffThanksWhisper = true,
 

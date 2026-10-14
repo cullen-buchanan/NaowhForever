@@ -31,10 +31,49 @@ local ANNOUNCE_W = 120
 local BUTTON_W, BUTTON_H, BUTTON_GAP = 112, 28, 8
 local FIELD_INSET = 8
 local HELP_TEXT_HEIGHT = 1000
+local SILVER_PER_GOLD = 100
 
--- Bounds keep session values and pipe-delimited addon payloads within safe sizes.
-local MAX_POOL, MAX_WORD = 100000000, 24
+-- Bounds keep silver-denominated pool values and payloads within safe sizes.
+local MAX_POOL, MAX_WORD = 100000000 * SILVER_PER_GOLD, 24
 local MAX_PARTICIPANTS, MAX_PLAYER_NAME, MAX_ROSTER_CHUNK = 40, 48, 150
+
+--- Convert a nonnegative total silver amount to canonical gold/silver text.
+-- @local
+-- @param amount Total silver, as a whole number.
+-- @return Amount formatted as "NgNNs".
+local function FormatPool(amount)
+    local gold = floor(amount / SILVER_PER_GOLD)
+    local silver = amount % SILVER_PER_GOLD
+    return ("%dg%02ds"):format(gold, silver)
+end
+
+--- Parse a pool string and return its value in total silver.
+-- @local
+-- @param text Pool formatted as integer gold followed by integer silver.
+-- @return Positive total silver within the configured limit, or nil.
+local function ParsePool(text)
+    if type(text) ~= "string" then return nil end
+    local goldText, silverText = lower(trim(text)):match("^(%d+)g(%d+)s$")
+    if not goldText then return nil end
+    local gold, silver = tonumber(goldText), tonumber(silverText)
+    if not (gold and silver and gold <= floor(MAX_POOL / SILVER_PER_GOLD)
+        and silver <= MAX_POOL) then return nil end
+    local amount = gold * SILVER_PER_GOLD + silver
+    if amount < 1 or amount > MAX_POOL then return nil end
+    return amount
+end
+
+--- Convert a legacy numeric pool setting, which was stored in gold.
+-- @local
+-- @param value Stored pool setting.
+-- @return Canonical gold/silver text or the original text for validation.
+local function PoolSettingText(value)
+    if type(value) == "number" and value >= 1 and value == floor(value)
+        and value <= floor(MAX_POOL / SILVER_PER_GOLD) then
+        return FormatPool(value * SILVER_PER_GOLD)
+    end
+    return tostring(value or "200g00s")
+end
 
 --- Map registered chat events to the channel used by Gamble.
 -- @table CHAT_EVENTS
@@ -65,7 +104,7 @@ local PATTERN_ESCAPE = {
 }
 -- Window labels and user-facing chat or validation messages.
 local TITLE, SUBTITLE = "Gamble", "Classic and Deathroll"
-local TEXT_POOL = "Pool"
+local TEXT_POOL = "Pool (g/s)"
 local TEXT_CHANNEL = "%s Chat"
 local TEXT_NEW, TEXT_LAST_CALL = "New Game", "Last Call"
 local TEXT_START = "Start Rolling"
@@ -74,20 +113,21 @@ local TEXT_NO_GAME = "Start a new session before rolling."
 local TEXT_NOT_LOBBY = "This session is already rolling."
 local TEXT_NOT_HOST = "Only the session host can start a new session."
 local TEXT_NEED_PLAYERS = "At least two players must join first."
-local TEXT_BAD_POOL = "Enter a whole-number pool between 1 and %d."
+local TEXT_BAD_POOL = "Enter a pool as gold and silver (for example 10g50s), between 0g01s and %s."
 local TEXT_BAD_WORD = "Join and leave words must be different single words without |."
 local TEXT_NEED_GROUP = "Join a party or raid before using that chat channel."
-local TEXT_STARTED = "Gamble session started: %s, pool %d. Say \"%s\" to join or \"%s\" to leave; use /roll when it's your turn."
+local TEXT_STARTED = "Gamble session started: %s, pool %s. Say \"%s\" to join or \"%s\" to leave; use /roll when it's your turn."
 local TEXT_CANCELLED = "Gamble session cancelled by %s."
 local TEXT_LAST = "Last call: say \"%s\" in %s chat to join."
 local TEXT_JOINED = "%s joined the Gamble session."
 local TEXT_LEFT = "%s left the Gamble session."
-local TEXT_DUEL = "Deathroll: %s and %s are playing for %d gold."
+local TEXT_DUEL = "Deathroll: %s and %s are playing for %s."
 local TEXT_DUEL_START = "%s was randomly selected to roll first. Roll from 1 to %d."
+local TEXT_CLASSIC_START = "Everyone can start rolling from 1 to %d."
 local TEXT_ANNOUNCE, TEXT_STILL_NEED = "Announce Rolls", "Still need to roll: %s. Roll from 1 to %d."
 local TEXT_NEXT_ROLL = "%s, roll from 1 to %d."
 local TEXT_NO_ROLLS = "Everyone has rolled."
-local TEXT_SETTLEMENT = "%s pays %s %d gold."
+local TEXT_SETTLEMENT = "%s pays %s %s."
 local TEXT_ROSTER = "No players have joined yet."
 local TEXT_ROSTER_ROW = "%s  %s"
 local TEXT_MODE = "Game mode: %s"
@@ -337,7 +377,7 @@ local function UpdateDisplay()
     local channel = game and game.phase ~= "complete" and game.channel or S.Get("gambleChannel")
     channel = CHANNEL_LABEL[channel] and channel or "PARTY"
     ns.SetButtonText(channelButton, TEXT_CHANNEL:format(CHANNEL_LABEL[channel]))
-    if game and game.phase ~= "complete" then poolBox:SetText(tostring(game.pool)) end
+    if game and game.phase ~= "complete" then poolBox:SetText(FormatPool(game.pool)) end
     lastCallButton:SetEnabled(game ~= nil and game.phase == "lobby" and game.isHost)
     startButton:SetEnabled(game ~= nil and game.phase == "lobby" and game.isHost)
     cancelButton:SetEnabled(game ~= nil and game.phase ~= "complete" and game.isHost)
@@ -480,7 +520,7 @@ local function StartDeathroll()
     local firstIndex, secondIndex = random(#players), random(#players - 1)
     if secondIndex >= firstIndex then secondIndex = secondIndex + 1 end
     local first, second = players[firstIndex], players[secondIndex]
-    SendChat(TEXT_DUEL:format(first.name, second.name, game.pool), game.channel)
+    SendChat(TEXT_DUEL:format(first.name, second.name, FormatPool(game.pool)), game.channel)
     local starter = random(2) == 1 and first or second
     game.duel = { first = first, second = second, next = starter, pot = game.pool }
     SendAddon(AddonPayload("M", game.pool, first.name, second.name, starter.name), game.channel)
@@ -501,6 +541,7 @@ local function StartRolling()
     if game.mode == "deathroll" then
         StartDeathroll()
     else
+        SendChat(TEXT_CLASSIC_START:format(game.pool), game.channel)
         SetClassicRound(game.participants, game.pool)
     end
 end
@@ -533,7 +574,7 @@ local function ClassicResult()
     local loser, winner = lows[1], highs[1]
     local amount = high - low
     if loser and winner and loser ~= winner and amount > 0 then
-        SendChat(TEXT_SETTLEMENT:format(loser.name, winner.name, amount), game.channel)
+        SendChat(TEXT_SETTLEMENT:format(loser.name, winner.name, FormatPool(amount)), game.channel)
         SendAddon(AddonPayload("D", loser.name, winner.name, amount), game.channel)
     end
     game.phase = "complete"
@@ -550,7 +591,7 @@ local function DeathrollResult(player, value)
     if not duel then return end
     if value == 1 then
         local winner = player.key == duel.first.key and duel.second or duel.first
-        SendChat(TEXT_SETTLEMENT:format(player.name, winner.name, duel.pot), game.channel)
+        SendChat(TEXT_SETTLEMENT:format(player.name, winner.name, FormatPool(duel.pot)), game.channel)
         SendAddon(AddonPayload("D", player.name, winner.name, duel.pot), game.channel)
         game.phase = "complete"
         UpdateListening()
@@ -667,7 +708,7 @@ end
 -- @param sender Addon-message sender and host identity.
 -- @param channel Channel on which the session was announced.
 -- @param id Unique session identifier.
--- @param pool Initial stake amount.
+-- @param pool Initial stake in total silver.
 -- @param mode Game mode identifier.
 -- @param joinWord Configured lobby join word.
 -- @param leaveWord Configured lobby leave word.
@@ -801,17 +842,16 @@ function OnEvent(_, event, ...)
     end
 end
 
---- Validate the pool input and persist it as the configured default.
+--- Parse the gold/silver pool as total silver and persist its canonical form.
 -- @local
--- @return Positive integer pool amount, or nil after displaying an error.
+-- @return Positive total silver, or nil after displaying an error.
 local function GetPool()
-    local text = trim(poolBox:GetText() or "")
-    local amount = tonumber(text)
-    if not (amount and amount >= 1 and amount <= MAX_POOL and amount == floor(amount)) then
-        ns.Print(TEXT_BAD_POOL:format(MAX_POOL))
+    local amount = ParsePool(poolBox:GetText() or "")
+    if not amount then
+        ns.Print(TEXT_BAD_POOL:format(FormatPool(MAX_POOL)))
         return nil
     end
-    S.Set("gamblePool", amount)
+    S.Set("gamblePool", FormatPool(amount))
     return amount
 end
 
@@ -857,7 +897,7 @@ local function NewGame()
     }
     UpdateListening()
     BroadcastOpen()
-    SendChat(TEXT_STARTED:format(MODE_LABEL[mode], pool, game.joinWord, game.leaveWord), channel)
+    SendChat(TEXT_STARTED:format(MODE_LABEL[mode], FormatPool(pool), game.joinWord, game.leaveWord), channel)
     UpdateDisplay()
 end
 
@@ -976,8 +1016,7 @@ local function CreateControls()
     poolBox = ns.NewEditBox(controls, { inset = FIELD_INSET })
     poolBox:SetSize(POOL_W, POOL_H)
     poolBox:SetPoint("LEFT", poolLabel, "RIGHT", ROW_GAP, 0)
-    poolBox:SetText(tostring(S.Get("gamblePool") or 200))
-    poolBox:SetNumeric(true)
+    poolBox:SetText(PoolSettingText(S.Get("gamblePool")))
     poolBox:SetScript("OnEnterPressed", SavePool)
     poolBox:SetScript("OnEditFocusLost", SavePool)
 
