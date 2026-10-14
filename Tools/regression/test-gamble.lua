@@ -132,6 +132,7 @@ function ns.SetButtonText(button, text) button.text = text end
 function ns.AccentBorder(button) return button end
 function ns.UIScale() return 1 end
 function ns.Print(text) state.prints[#state.prints + 1] = text end
+function ns.StashOptionsWindow() state.optionsStashed = true end
 function ns.UI.SlimScroll(parent)
     local scroll = widget()
     scroll.parent = parent
@@ -223,6 +224,11 @@ check("off by default, Gamble builds no frames", #state.frames == 0 and #state.p
 S.Set("gamble", true)
 ns.ToggleGamble()
 check("opening registers the session listeners", state.window:IsShown() and state.events.events.CHAT_MSG_SYSTEM)
+state.optionsStashed = false
+state.window:Hide()
+state.card.rows[1].button()
+check("Open closes the main options menu before opening Gamble",
+    state.optionsStashed and state.window:IsShown())
 check("legacy numeric pool settings are shown as gold and silver",
     state.editboxes[1]:GetText() == "200g00s")
 local helpButton = Button("How to play")

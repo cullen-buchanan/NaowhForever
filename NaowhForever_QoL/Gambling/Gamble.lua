@@ -1127,6 +1127,11 @@ function ns.ToggleGamble()
     end
 end
 
+local function OpenGamble()
+    ns.StashOptionsWindow()
+    ns.ToggleGamble()
+end
+
 --- React to Gamble-related setting changes and keep the window synchronized.
 -- @local
 -- @param key Setting name reported by the shared settings manager.
@@ -1167,7 +1172,7 @@ ns.Shared.Settings.Page(PAGE, S):Card({
     id = "gamble", name = "Gamble", order = 50, switch = "gamble",
     help = "Run Classic gambling sessions or a two-player Deathroll.",
     rows = {
-        { label = "Open Gamble", buttonText = "Open", button = ns.ToggleGamble,
+        { label = "Open Gamble", buttonText = "Open", button = OpenGamble,
           help = "Opens the Gamble window." },
     },
 })
