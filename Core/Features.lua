@@ -210,7 +210,6 @@ ns.FEATURES = {
         questSparkle = false,
         minimapIcons = false,
         gatheredPins = false,
-        cutout = false,
     },
     swingTimer = {
         enabled = true,
