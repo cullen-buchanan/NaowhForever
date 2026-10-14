@@ -88,6 +88,7 @@ NaowhForever_QoL/
                         and its card on the Training Planner's page
   Gambling/
     Gamble.lua          Gamble sessions: Classic rolls and Deathroll
+    GambleHelp.lua      Holds help text on how the gamble function works.
   XP/
     GroupXP.lua         Group XP
     XPTicker.lua        XP per Hour (ns.ResetXPTicker)
@@ -276,9 +277,10 @@ NaowhForever_QoL/
   channel to keep Gamble windows in sync. Players and the host join or leave in group chat and use
   `/roll` when prompted. The addon tracks rolls and reports settlements; it never moves gold.
 - Enter the pool as integer gold and silver, such as `10g50s`; one gold is 100 silver, so that
-  example sets the roll maximum to 1,050. Classic rerolls only tied highest or lowest players and
-  announces the roll difference in gold/silver. Deathroll chooses two joined players and alternates
-  their rolls until one rolls 1; its first roll uses the same total-silver maximum.
+  example sets the roll maximum to 1,050. Classic rerolls only players tied at the highest or
+  lowest roll to decide that side's winner or loser; the original high-low difference determines
+  the amount. Deathroll chooses two joined players and alternates their rolls until one rolls 1;
+  its first roll uses the same total-silver maximum.
 - Gamble registers chat events only while its window is open or a session is active. Its join and
   leave words and game mode can be changed in the main window. The host can cancel an active
   session from the main window. The title bar's How to play button opens a detailed in-game guide

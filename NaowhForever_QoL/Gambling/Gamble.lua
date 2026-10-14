@@ -3,6 +3,7 @@ local ns = _G.NaowhForever
 
 local Ambiguate, IsInGroup, IsInRaid = Ambiguate, IsInGroup, IsInRaid
 local UnitFullName, UnitName = UnitFullName, UnitName
+local UnitIsConnected, GetNumGroupMembers = UnitIsConnected, GetNumGroupMembers
 local floor, random = math.floor, math.random
 local concat, remove = table.concat, table.remove
 local lower, trim = strlower, strtrim
@@ -49,14 +50,6 @@ local function ParsePool(text)
     return amount
 end
 
-local function PoolSettingText(value)
-    if type(value) == "number" and value >= 1 and value == floor(value)
-        and value <= floor(MAX_POOL / SILVER_PER_GOLD) then
-        return FormatPool(value * SILVER_PER_GOLD)
-    end
-    return tostring(value or "200g00s")
-end
-
 local CHAT_EVENTS = {
     CHAT_MSG_PARTY = "PARTY", CHAT_MSG_PARTY_LEADER = "PARTY",
     CHAT_MSG_RAID = "RAID", CHAT_MSG_RAID_LEADER = "RAID",
@@ -87,6 +80,7 @@ local TEXT_BAD_WORD = "Join and leave words must be different single words witho
 local TEXT_NEED_GROUP = "Join a party or raid before using that chat channel."
 local TEXT_STARTED = "Gamble session started: %s, pool %s. Say \"%s\" to join or \"%s\" to leave; use /roll when it's your turn."
 local TEXT_CANCELLED = "Gamble session cancelled by %s."
+local TEXT_HOST_LEFT = "Host left; session ended."
 local TEXT_LAST = "Last call: say \"%s\" in %s chat to join."
 local TEXT_JOINED = "%s joined the Gamble session."
 local TEXT_LEFT = "%s left the Gamble session."
@@ -130,6 +124,26 @@ end
 
 local function PlayerName()
     return UnitFullName("player") or UnitName("player") or "Player"
+end
+
+local function HostIsConnected()
+    if not (game and game.hostKey and IsInGroup()) then return false end
+    local raid = IsInRaid()
+    local count = GetNumGroupMembers() - (raid and 0 or 1)
+    local prefix = raid and "raid" or "party"
+    for index = 1, count do
+        local unit = prefix .. index
+        local name, realm = UnitFullName(unit)
+        name = name or UnitName(unit)
+        if name then
+            local fullName = realm and realm ~= "" and name .. "-" .. realm or name
+            if PlayerKey(fullName) == game.hostKey
+                or (not game.hostKey:find("-", 1, true) and PlayerKey(name) == game.hostKey) then
+                return UnitIsConnected(unit)
+            end
+        end
+    end
+    return false
 end
 
 local function IsOn()
@@ -189,6 +203,8 @@ local function UpdateListening()
     events:UnregisterAllEvents()
     events:RegisterEvent("CHAT_MSG_SYSTEM")
     events:RegisterEvent("CHAT_MSG_ADDON")
+    events:RegisterEvent("GROUP_ROSTER_UPDATE")
+    events:RegisterEvent("UNIT_CONNECTION")
     for event in pairs(CHAT_EVENTS) do events:RegisterEvent(event) end
 end
 
@@ -258,7 +274,8 @@ local function UpdateDisplay()
     if game and game.phase == "rolling" then phaseText = "Waiting for rolls" end
     if game and game.phase == "deathroll" then phaseText = "Deathroll in progress" end
     if game and game.phase == "complete" then
-        phaseText = game.cancelled and "Session cancelled" or "Session complete"
+        phaseText = game.hostLeft and TEXT_HOST_LEFT
+            or (game.cancelled and "Session cancelled" or "Session complete")
     end
     status:SetText(phaseText)
 
@@ -291,12 +308,9 @@ local function AddonPayload(kind, ...)
     return kind .. "|" .. game.id .. "|" .. concat({ ... }, "|")
 end
 
-local function BroadcastRoster()
-    if not (game and game.isHost) then return end
-    if #game.participants == 0 then return end
-    game.rosterVersion = (game.rosterVersion or 0) + 1
+local function ChunkPlayers(players)
     local chunks, current, size = {}, {}, 0
-    for _, player in ipairs(game.participants) do
+    for _, player in ipairs(players) do
         local name = player.name
         local added = #name + (#current > 0 and 1 or 0)
         if size + added > MAX_ROSTER_CHUNK then
@@ -307,6 +321,14 @@ local function BroadcastRoster()
         current[#current + 1], size = name, size + added
     end
     if #current > 0 then chunks[#chunks + 1] = concat(current, ",") end
+    return chunks
+end
+
+local function BroadcastRoster()
+    if not (game and game.isHost) then return end
+    if #game.participants == 0 then return end
+    game.rosterVersion = (game.rosterVersion or 0) + 1
+    local chunks = ChunkPlayers(game.participants)
     for index, chunk in ipairs(chunks) do
         SendAddon(AddonPayload("R", game.rosterVersion, index, #chunks, chunk), game.channel)
     end
@@ -315,18 +337,7 @@ end
 local function BroadcastRound()
     if not (game and game.isHost and game.round) then return end
     game.roundVersion = (game.roundVersion or 0) + 1
-    local chunks, current, size = {}, {}, 0
-    for _, player in ipairs(game.round.players) do
-        local name = player.name
-        local added = #name + (#current > 0 and 1 or 0)
-        if size + added > MAX_ROSTER_CHUNK then
-            chunks[#chunks + 1] = concat(current, ",")
-            current, size = {}, 0
-            added = #name
-        end
-        current[#current + 1], size = name, size + added
-    end
-    if #current > 0 then chunks[#chunks + 1] = concat(current, ",") end
+    local chunks = ChunkPlayers(game.round.players)
     for index, chunk in ipairs(chunks) do
         SendAddon(AddonPayload("C", game.roundVersion, game.round.max, index, #chunks, chunk), game.channel)
     end
@@ -364,7 +375,6 @@ local function SetClassicRound(players, max)
     local expected = RosterMap(players)
     game.phase = "rolling"
     game.round = { expected = expected, rolls = {}, players = players, max = max }
-    game.rollMax = max
     if game.isHost then
         BroadcastRound()
     end
@@ -374,7 +384,6 @@ end
 local function SetDeathrollTurn(player, max)
     game.phase = "deathroll"
     game.round = { expected = { [player.key] = player }, rolls = {}, players = { player }, max = max }
-    game.rollMax = max
     if game.isHost then
         SendAddon(AddonPayload("T", max, player.name), game.channel)
     end
@@ -410,38 +419,83 @@ local function StartRolling()
     end
 end
 
-local function ClassicResult()
-    local round = game.round
-    local high, low, highs, lows
-    for _, player in ipairs(round.players) do
-        local value = round.rolls[player.key]
-        if value then
-            if high == nil or value > high then high, highs = value, { player }
-            elseif value == high then highs[#highs + 1] = player end
-            if low == nil or value < low then low, lows = value, { player }
-            elseif value == low then lows[#lows + 1] = player end
-        end
-    end
-    if #highs > 1 or #lows > 1 then
-        local tied, seen = {}, {}
-        for _, player in ipairs(highs) do
-            if not seen[player.key] then tied[#tied + 1], seen[player.key] = player, true end
-        end
-        for _, player in ipairs(lows) do
-            if not seen[player.key] then tied[#tied + 1], seen[player.key] = player, true end
-        end
-        SetClassicRound(tied, game.pool)
-        return
-    end
-    local loser, winner = lows[1], highs[1]
-    local amount = high - low
-    if loser and winner and loser ~= winner and amount > 0 then
+local function FinishClassic(winner, loser, amount)
+    if winner and loser and winner ~= loser and amount > 0 then
         SendChat(TEXT_SETTLEMENT:format(loser.name, winner.name, FormatPool(amount)), game.channel)
-        SendAddon(AddonPayload("D", loser.name, winner.name, amount), game.channel)
     end
+    SendAddon(AddonPayload("D", loser and loser.name or "", winner and winner.name or "", amount), game.channel)
+    game.tieBreak = nil
     game.phase = "complete"
     UpdateListening()
     UpdateDisplay()
+end
+
+local function ContinueClassicTieBreak()
+    local tie = game.tieBreak
+    if tie.highPlayers then
+        tie.side = "high"
+        SetClassicRound(tie.highPlayers, game.pool)
+    elseif tie.lowPlayers then
+        tie.side = "low"
+        SetClassicRound(tie.lowPlayers, game.pool)
+    else
+        FinishClassic(tie.winner, tie.loser, tie.originalHigh - tie.originalLow)
+    end
+end
+
+local function ClassicTieBreakResult()
+    local tie, round = game.tieBreak, game.round
+    local extreme, tied
+    for _, player in ipairs(round.players) do
+        local value = round.rolls[player.key]
+        if tie.side == "high" then
+            if extreme == nil or value > extreme then extreme, tied = value, { player }
+            elseif value == extreme then tied[#tied + 1] = player end
+        elseif extreme == nil or value < extreme then
+            extreme, tied = value, { player }
+        elseif value == extreme then
+            tied[#tied + 1] = player
+        end
+    end
+    if #tied > 1 then
+        tie[tie.side .. "Players"] = tied
+    elseif tie.side == "high" then
+        tie.winner, tie.highPlayers = tied[1], nil
+    else
+        tie.loser, tie.lowPlayers = tied[1], nil
+    end
+    ContinueClassicTieBreak()
+end
+
+local function ClassicResult()
+    if game.tieBreak then
+        ClassicTieBreakResult()
+        return
+    end
+    local high, low, highs, lows
+    for _, player in ipairs(game.round.players) do
+        local value = game.round.rolls[player.key]
+        if high == nil or value > high then high, highs = value, { player }
+        elseif value == high then highs[#highs + 1] = player end
+        if low == nil or value < low then low, lows = value, { player }
+        elseif value == low then lows[#lows + 1] = player end
+    end
+    local tie = {
+        originalHigh = high,
+        originalLow = low,
+        winner = #highs == 1 and highs[1] or nil,
+        loser = #lows == 1 and lows[1] or nil,
+        highPlayers = #highs > 1 and highs or nil,
+        lowPlayers = #lows > 1 and lows or nil,
+    }
+    if tie.originalHigh == tie.originalLow then
+        FinishClassic(nil, nil, 0)
+    elseif tie.highPlayers or tie.lowPlayers then
+        game.tieBreak = tie
+        ContinueClassicTieBreak()
+    else
+        FinishClassic(tie.winner, tie.loser, tie.originalHigh - tie.originalLow)
+    end
 end
 
 local function DeathrollResult(player, value)
@@ -465,6 +519,7 @@ local function OnRoll(name, value, minimum, maximum)
     local key = PlayerKey(name)
     if not (key and game and game.round and game.round.expected[key]) then return end
     if minimum ~= 1 or maximum ~= game.round.max or value < minimum or value > maximum then return end
+    if game.round.rolls[key] then return end
     game.round.rolls[key] = value
     UpdateDisplay()
     if not game.isHost then return end
@@ -547,7 +602,7 @@ local function OpenPayload(sender, channel, id, pool, mode, joinWord, leaveWord,
     game = {
         id = id, pool = amount, mode = mode, channel = channel, phase = "lobby",
         hostKey = PlayerKey(sender), isHost = false, participants = {}, players = {},
-        joinWord = joinWord, leaveWord = leaveWord, hostName = Ambiguate(ownerName, "none"),
+        joinWord = joinWord, leaveWord = leaveWord,
     }
     UpdateListening()
     UpdateDisplay()
@@ -580,14 +635,6 @@ local function OnAddonMessage(prefix, message, channel, sender)
         return
     end
     if not (game and game.id == id and game.channel == channel) then return end
-    if kind == "J" then
-        if game.isHost and game.phase == "lobby" and AddPlayer(sender) then
-            SendChat(TEXT_JOINED:format(Ambiguate(sender, "none")), game.channel)
-            BroadcastRoster()
-            UpdateDisplay()
-        end
-        return
-    end
     if key ~= game.hostKey then return end
     if kind == "R" then
         local version, index, count, chunk = rest:match("^(%d+)|(%d+)|(%d+)|(.+)$")
@@ -604,7 +651,6 @@ local function OnAddonMessage(prefix, message, channel, sender)
         if max and max <= MAX_POOL and players and #players > 0 then
             game.phase, game.mode = "rolling", "classic"
             game.round = { expected = RosterMap(players), players = players, rolls = {}, max = max }
-            game.rollMax = max
             UpdateDisplay()
         end
     elseif kind == "M" then
@@ -626,13 +672,12 @@ local function OnAddonMessage(prefix, message, channel, sender)
             game.duel = game.duel or { first = player, second = player, next = player, pot = game.pool }
             game.phase = "deathroll"
             game.round = { expected = { [player.key] = player }, players = { player }, rolls = {}, max = max }
-            game.rollMax = max
             UpdateDisplay()
         end
     elseif kind == "D" and game.phase ~= "complete" then
-        local loser, winner, amount = rest:match("^([^|]+)|([^|]+)|(%d+)$")
+        local amount = rest:match("^[^|]*|[^|]*|(%d+)$")
         amount = tonumber(amount)
-        if loser and winner and amount and amount <= MAX_POOL then
+        if amount and amount <= MAX_POOL then
             game.phase = "complete"
             UpdateListening()
             UpdateDisplay()
@@ -645,11 +690,21 @@ local function OnAddonMessage(prefix, message, channel, sender)
     end
 end
 
+local function EndRemoteSessionIfHostLeft()
+    if not (game and not game.isHost and game.phase ~= "complete")
+        or HostIsConnected() then return end
+    game.phase, game.cancelled, game.hostLeft = "complete", true, true
+    UpdateListening()
+    UpdateDisplay()
+end
+
 function OnEvent(_, event, ...)
     if event == "CHAT_MSG_SYSTEM" then
         OnSystemMessage(...)
     elseif event == "CHAT_MSG_ADDON" then
         OnAddonMessage(...)
+    elseif event == "GROUP_ROSTER_UPDATE" or event == "UNIT_CONNECTION" then
+        EndRemoteSessionIfHostLeft()
     elseif CHAT_EVENTS[event] then
         OnChannelMessage(event, ...)
     end
@@ -667,6 +722,7 @@ end
 
 local function NewGame()
     if not IsOn() then ns.Print(TEXT_NOT_ACTIVE); return end
+    EndRemoteSessionIfHostLeft()
     if game and game.phase ~= "complete" and not game.isHost then
         ns.Print(TEXT_NOT_HOST)
         return
@@ -803,7 +859,7 @@ local function CreateControls()
     poolBox = ns.NewEditBox(controls, { inset = FIELD_INSET })
     poolBox:SetSize(POOL_W, POOL_H)
     poolBox:SetPoint("LEFT", poolLabel, "RIGHT", ROW_GAP, 0)
-    poolBox:SetText(PoolSettingText(S.Get("gamblePool")))
+    poolBox:SetText(S.Get("gamblePool"))
     poolBox:SetScript("OnEnterPressed", SavePool)
     poolBox:SetScript("OnEditFocusLost", SavePool)
 
@@ -841,7 +897,6 @@ local function CreateControls()
 end
 
 local function CreateWindow()
-    assert(type(ns.GambleHelpText) == "string", "Gamble help text was not loaded")
     window = Parts.Window(WINDOW_W, WINDOW_H, "gambleWindow")
     window.backdrop:Card(PAD, HEADER + PAD, PAD, FOOTER + PAD)
     local closeButton = Parts.TitleBar(window, TITLE, SUBTITLE, PAGE)
@@ -934,15 +989,6 @@ local function OnSettingChanged(key)
     UpdateDisplay()
 end
 
-OnEvent = function(_, event, ...)
-    if event == "CHAT_MSG_SYSTEM" then
-        OnSystemMessage(...)
-    elseif event == "CHAT_MSG_ADDON" then
-        OnAddonMessage(...)
-    elseif CHAT_EVENTS[event] then
-        OnChannelMessage(event, ...)
-    end
-end
 S.OnChange(OnSettingChanged)
 ns.Shared.Settings.Page(PAGE, S):Card({
     id = "gamble", name = "Gamble", order = 50, switch = "gamble",

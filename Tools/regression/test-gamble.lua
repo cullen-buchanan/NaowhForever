@@ -2,10 +2,11 @@
 local checks = 0
 local function check(label, value) assert(value, label); checks = checks + 1 end
 
-local state = { settings = { enabled = true, gamble = false, gambleChannel = "PARTY", gamblePool = 200,
+local state = { settings = { enabled = true, gamble = false, gambleChannel = "PARTY", gamblePool = "200g00s",
     gambleMode = "classic", gambleJoinWord = "join", gambleLeaveWord = "leave" },
     buttons = {}, chats = {}, addons = {},
-    prints = {}, frames = {}, listeners = {}, editboxes = {}, fonts = {}, inRaid = false }
+    prints = {}, frames = {}, listeners = {}, editboxes = {}, fonts = {}, inRaid = false,
+    party = { "Alice Stone", "Bob", "Guest" }, disconnected = {} }
 
 local widgetMethods = {}
 function widgetMethods:SetText(text) self.text = text end
@@ -161,8 +162,18 @@ local env = setmetatable({
         if parent == state.helpScroll then state.helpContent = frame end
         return frame
     end,
-    UnitName = function() return "Host" end,
-    UnitFullName = function() return "Host" end,
+    UnitName = function(unit)
+        if unit == "player" then return "Host" end
+        local index = tonumber(unit:match("^party(%d+)$"))
+        return index and state.party[index]
+    end,
+    UnitFullName = function(unit)
+        if unit == "player" then return "Host" end
+        local index = tonumber(unit:match("^party(%d+)$"))
+        return index and state.party[index]
+    end,
+    UnitIsConnected = function(unit) return state.disconnected[unit] ~= true end,
+    GetNumGroupMembers = function() return #state.party + 1 end,
     Ambiguate = function(name, mode)
         return mode == "short" and (name:gsub("%-%w+$", "")) or name
     end,
@@ -229,7 +240,7 @@ state.window:Hide()
 state.card.rows[1].button()
 check("Open closes the main options menu before opening Gamble",
     state.optionsStashed and state.window:IsShown())
-check("legacy numeric pool settings are shown as gold and silver",
+check("the default pool setting is shown as gold and silver",
     state.editboxes[1]:GetText() == "200g00s")
 local helpButton = Button("How to play")
 local helpAnchor = rawget(helpButton, "anchorPoints")[1]
@@ -323,29 +334,65 @@ check("host and players join through group chat",
     state.roster.text:find("Host", 1, true) ~= nil
         and state.roster.text:find("Alice Stone", 1, true) ~= nil
         and state.roster.text:find("Bob", 1, true) ~= nil)
+check("roster broadcasts retain the expected chunk protocol",
+    state.addons[#state.addons][2]:match("^R|[^|]+|3|1|1|Host,Alice Stone,Bob$") ~= nil)
 Button("Start Rolling"):Click()
 check("Start Rolling starts the Classic round when players joined",
     state.status.text == "Waiting for rolls")
+check("round broadcasts retain the expected chunk protocol",
+    state.addons[#state.addons][2]:match("^C|[^|]+|1|1050|1|1|Host,Alice Stone,Bob$") ~= nil)
 check("starting Classic announces that everyone can roll and the silver limit",
     Chat("Everyone can start rolling from 1 to 1050.", "PARTY"))
 Button("Announce Rolls"):Click()
 check("Classic announces only players still waiting and the roll range",
     Chat("Still need to roll: Host, Alice Stone and Bob. Roll from 1 to 1050", "PARTY"))
+Event("CHAT_MSG_SYSTEM", "You roll 70 (1-1050)")
+check("a local /roll result is counted for the host", state.roster.text:find("Host  70", 1, true) ~= nil)
 Event("CHAT_MSG_SYSTEM", "You roll 90 (1-1050)")
-check("a local /roll result is counted for the host", state.roster.text:find("Host  90", 1, true) ~= nil)
+check("Classic ignores a player's later reroll", state.roster.text:find("Host  70", 1, true) ~= nil)
 Button("Announce Rolls"):Click()
 check("Classic roll calls exclude players who already rolled",
     Chat("Still need to roll: Alice Stone and Bob. Roll from 1 to 1050", "PARTY"))
 Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 90 (1-1050)")
 Event("CHAT_MSG_SYSTEM", "Bob rolls 20 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Host rolls 70 (1-1050)")
-Button("Announce Rolls"):Click()
-check("Classic roll calls exclude players who already rolled",
-    Chat("Still need to roll: Alice Stone and Bob. Roll from 1 to 1050", "PARTY"))
-Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 180 (1-1050)")
-Event("CHAT_MSG_SYSTEM", "Bob rolls 30 (1-1050)")
 check("Classic settlement converts a silver difference to gold and silver",
-    Chat("Bob pays Alice Stone 1g50s", "PARTY"))
+    Chat("Bob pays Alice Stone 0g70s", "PARTY"))
+
+Button("New Game"):Click()
+Event("CHAT_MSG_PARTY", "join", "Host")
+Event("CHAT_MSG_PARTY", "join", "Alice Stone")
+Event("CHAT_MSG_PARTY", "join", "Bob")
+Button("Start Rolling"):Click()
+Event("CHAT_MSG_SYSTEM", "You roll 20 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 90 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Bob rolls 90 (1-1050)")
+check("a tied high side rerolls only its tied players",
+    state.addons[#state.addons][2]:match("^C|[^|]+|2|1050|1|1|Alice Stone,Bob$") ~= nil)
+local settlementsBeforeTieBreak = #state.chats
+Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 10 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Bob rolls 100 (1-1050)")
+check("a high-side tie-break keeps the original spread and unique low",
+    #state.chats == settlementsBeforeTieBreak + 1
+        and Chat("Host pays Bob 0g70s", "PARTY"))
+
+Button("New Game"):Click()
+Event("CHAT_MSG_PARTY", "join", "Host")
+Event("CHAT_MSG_PARTY", "join", "Alice Stone")
+Event("CHAT_MSG_PARTY", "join", "Bob")
+Event("CHAT_MSG_PARTY", "join", "Guest")
+Button("Start Rolling"):Click()
+Event("CHAT_MSG_SYSTEM", "You roll 20 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 90 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Bob rolls 90 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Guest rolls 20 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Alice Stone rolls 50 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Bob rolls 70 (1-1050)")
+check("when both extremes tie, the low-side reroll excludes the resolved high side",
+    state.addons[#state.addons][2]:match("^C|[^|]+|3|1050|1|1|Host,Guest$") ~= nil)
+Event("CHAT_MSG_SYSTEM", "You roll 20 (1-1050)")
+Event("CHAT_MSG_SYSTEM", "Guest rolls 10 (1-1050)")
+check("both tie-breaks preserve the original high-low settlement amount",
+    Chat("Guest pays Bob 0g70s", "PARTY"))
 
 state.editboxes[2]:SetText("ready|bad")
 state.editboxes[3]:SetText("gone")
@@ -407,6 +454,22 @@ Event("CHAT_MSG_ADDON", "NaowhGamble", "D|remote|Bob|Alice|10", "PARTY", "Host")
 check("a completed session unregisters hidden-window listeners", next(state.events.events) == nil)
 
 ns.ToggleGamble()
+state.party = { "Alice Stone", "Bob", "Guest" }
+Event("CHAT_MSG_ADDON", "NaowhGamble", "O|host-left|200|classic|ready|gone|Guest", "PARTY", "Guest")
+state.party = { "Alice Stone", "Bob" }
+Event("GROUP_ROSTER_UPDATE")
+check("a remote session ends when its host leaves the group",
+    state.status.text == "Host left; session ended." and Button("New Game").enabled)
+state.party = { "Alice Stone", "Bob", "Guest" }
+Event("CHAT_MSG_ADDON", "NaowhGamble", "O|host-offline|200|classic|ready|gone|Guest", "PARTY", "Guest")
+state.disconnected.party3 = true
+Event("UNIT_CONNECTION", "party3", false)
+check("a remote session ends when its host disconnects",
+    state.status.text == "Host left; session ended." and Button("New Game").enabled)
+state.disconnected = {}
+Button("New Game"):Click()
+check("a new local session can start after the remote host disappears",
+    state.status.text == "Waiting for players to join" and state.addons[#state.addons][2]:match("^O|"))
 S.Set("gambleMode", "classic")
 Button("New Game"):Click()
 Event("CHAT_MSG_PARTY", "ready", "Host")

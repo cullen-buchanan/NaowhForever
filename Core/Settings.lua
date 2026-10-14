@@ -165,10 +165,7 @@ local S = UI.ModuleSettings("qol", {
     talentPointsFontSize = 22, talentPointsOutline = "OUTLINE", talentPointsBackground = "none",
     talentPointsTheme = false,
     buffThanks = F.buffThanks, buffThanksCooldown = 10, buffThanksGroup = false, buffThanksEmote = false,
-    gamble = F.gamble, gambleChannel = "PARTY", gamblePool = "200g00s", gambleMode = "classic",
-    gambleJoinWord = "join", gambleLeaveWord = "leave",
     buffThanksWhisper = true,
-
     buffThanksText = "Thanks for the {buff}, fellow traveler!\nMuch appreciated, {name}, thanks for the {buff}!",
     buffThanksPerBuff = false,
     buffThanksIntellect = "Thanks for the {buff}! I feel smarter already.\nThanks for the {buff}, {name}, my brain thanks you!\nIQ is rising, thank you for the {buff}, {name}!",
@@ -267,5 +264,8 @@ local S = UI.ModuleSettings("qol", {
     waypoints = F.waypoints, waypointShape = "hex", waypointScale = 1, waypointCard = true,
     waypointTime = true, waypointBeam = true, waypointFadeNear = 40, waypointEdge = true,
     waypointNav = true, waypointSound = "none", waypointHideGame = true,
+
+    gamble = F.gamble, gambleChannel = "PARTY", gamblePool = "200g00s", gambleMode = "classic",
+    gambleJoinWord = "join", gambleLeaveWord = "leave",
 })
 ns.QoLSettings = S

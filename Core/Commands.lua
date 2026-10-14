@@ -40,8 +40,7 @@ local HELP_LINES = {
     ns.L("/nf efficiency: Mana Efficiency, every rank of your mana spells"),
     ns.L("/nf shopping: the Professions Shopping List"),
     ns.L("/nf quiz: the WoW quiz"),
-    "/nf gamble: open Gamble",
-
+    ns.L("/nf gamble: open Gamble"),
     "/nf setup: the onboarding",
     ns.L("/nfquests (or /nfcompleto): the Quest List, in Discovery"),
 }

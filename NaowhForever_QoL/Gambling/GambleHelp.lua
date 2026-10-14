@@ -11,7 +11,7 @@ Select New Game to announce the session. Players, including the host, join by sa
 CLASSIC
 When the host selects Start Rolling, chat announces that everyone can roll and gives the roll limit. Every joined player rolls from 1 to the pool's total silver value using /roll. With a 10g50s pool, each player rolls from 1 to 1,050. Use Announce Rolls to remind players who still need to roll and show the roll range.
 
-When everyone has rolled, the player with the lowest roll pays the player with the highest roll the difference between those rolls. The difference is silver and is announced in gold-and-silver format (for example, 50 silver is shown as 0g50s). If either extreme is tied, the tied players reroll until both extremes have a single player.
+When everyone has rolled, the player with the lowest roll pays the player with the highest roll the difference between those original rolls. The difference is silver and is announced in gold-and-silver format (for example, 50 silver is shown as 0g50s). If the highest or lowest roll is tied, only the players tied at that extreme reroll to decide that side's winner or loser. The original high and low rolls determine the amount, even if a tie-break roll changes the order.
 
 DEATHROLL
 After the host starts the game, two joined players are selected at random. Gamble announces the selected players, then announces which one was randomly chosen to roll first.
